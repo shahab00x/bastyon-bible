@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Get Bible Abbreviations</title>
+  </head>
+  <body>
+    <h1>Bible Book Abbreviations</h1>
+    <pre id="output">Loading...</pre>
+
+    <script>
+      fetch('./en_kjv.json')
+        .then((response) => response.json())
+        .then((data) => {
+          const abbreviations = data.map((book) => book.abbrev)
+          const output = document.getElementById('output')
+          output.textContent = ''
+
+          abbreviations.forEach((abbrev) => {
+            output.textContent += abbrev + '\n'
+          })
+
+          // Also create the mapping object
+          const mapping = {}
+          abbreviations.forEach((abbrev) => {
+            mapping[abbrev] = abbrev // Placeholder for full name
+          })
+
+          console.log('All abbreviations:', abbreviations)
+          console.log('Mapping object:', mapping)
+        })
+        .catch((error) => {
+          document.getElementById('output').textContent =
+            'Error: ' + error.message
+        })
+    </script>
+  </body>
+</html>

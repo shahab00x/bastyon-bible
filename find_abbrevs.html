@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Find Abbreviations</title>
+  </head>
+  <body>
+    <h1>Bible Book Abbreviations</h1>
+    <div id="output"></div>
+    <script>
+      fetch('/en_kjv.json')
+        .then((response) => response.json())
+        .then((data) => {
+          const abbreviations = data.map((book) => book.abbrev)
+          const output = document.getElementById('output')
+          output.innerHTML = '<pre>' + abbreviations.join('\n') + '</pre>'
+        })
+        .catch((error) => console.error('Error:', error))
+    </script>
+  </body>
+</html>
