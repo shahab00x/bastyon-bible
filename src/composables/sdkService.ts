@@ -27,7 +27,12 @@ export class SdkService {
       this.sdk = new window.BastyonSdk()
       await this.sdk.init()
       this.sdk.emit('loaded') // Notify the platform that the app is ready
-      await this.sdk.serviceWorker.register()
+
+      if (this.sdk.serviceWorker?.register)
+        await this.sdk.serviceWorker.register()
+      else
+        console.warn('Bastyon SDK: serviceWorker is not available in this context (likely embedded in iframe).')
+
       console.log('Bastyon SDK successfully initialized.')
     }
     catch (error) {
