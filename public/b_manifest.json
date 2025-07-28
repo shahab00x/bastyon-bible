@@ -3,5 +3,5 @@
   "name": "Bible",
   "description": "A simple Bible mini application",
   "author": "PUg3fuJRCeN1nae2BnZQzW6SodDxRovNS2",
-  "permissions": []
+  "scope": "bible.bastyon.ir"
 }
