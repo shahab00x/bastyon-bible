@@ -18,6 +18,7 @@ const selectedChapterIndex = ref<number | null>(null)
 const isLoading = ref(true)
 const searchQuery = ref('')
 const currentView = ref<'books' | 'chapter' | 'verse'>('books')
+const copiedVerse = ref<{ book: string, chapter: number, verse: number } | null>(null)
 
 // No internal mapping needed since name and abbrev are in the JSON
 
@@ -86,6 +87,17 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
   navigator.clipboard.writeText(text)
     .then(() => {
       console.log('Verse copied to clipboard')
+      // Set the copied verse reference
+      copiedVerse.value = { book: book.abbrev, chapter: chapterIndex, verse: verseIndex }
+
+      // Clear the copied state after 2 seconds
+      setTimeout(() => {
+        if (copiedVerse.value
+          && copiedVerse.value.book === book.abbrev
+          && copiedVerse.value.chapter === chapterIndex
+          && copiedVerse.value.verse === verseIndex)
+          copiedVerse.value = null
+      }, 2000)
     })
     .catch((err) => {
       console.error('Failed to copy: ', err)
@@ -191,9 +203,10 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
             <button
               class="copy-btn"
               title="Copy verse"
-              @click="copyVerse(selectedBook!, selectedChapterIndex, verseIndex, verseText)"
+              :class="{ copied: copiedVerse && copiedVerse.book === selectedBook?.abbrev && copiedVerse.chapter === selectedChapterIndex && copiedVerse.verse === verseIndex }"
+              @click="copyVerse(selectedBook!, selectedChapterIndex!, verseIndex, verseText)"
             >
-              📋
+              {{ copiedVerse && copiedVerse.book === selectedBook?.abbrev && copiedVerse.chapter === selectedChapterIndex && copiedVerse.verse === verseIndex ? '✓' : '📋' }}
             </button>
           </div>
         </div>
@@ -202,9 +215,9 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
 
     <!-- Footer -->
     <footer class="app-footer">
-      <p>📖 Holy Bible App - Offline Access</p>
+      <p>📖 Holy Bible App</p>
       <p class="footer-note">
-        Powered by Bastyon Mini-App Template
+        Developed by <a href="https://bastyon.com/shahab">Shahab</a>
       </p>
     </footer>
   </div>
@@ -215,6 +228,21 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+}
+
+/* Hide Bastyon SDK GitHub button */
+.bastyon-github-button,
+.github-button,
+[data-bastyon='github'],
+[class*='github'][class*='button'],
+#github-button {
+  display: none !important;
+}
+
+/* Hide any Bastyon SDK buttons if they have a common parent */
+.bastyon-sdk-buttons,
+.bastyon-social-buttons {
+  display: none !important;
 }
 
 .bible-header {
@@ -398,6 +426,11 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
 
 .copy-btn:hover {
   opacity: 1;
+}
+
+.copy-btn.copied {
+  opacity: 1;
+  color: #34c759;
 }
 
 .app-footer {
