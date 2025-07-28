@@ -3,5 +3,7 @@
   "name": "Bible",
   "description": "A simple Bible mini application",
   "author": "PUg3fuJRCeN1nae2BnZQzW6SodDxRovNS2",
-  "scope": "bible.bastyon.ir"
+  "scope": "bible.bastyon.ir",
+  "start_url": "index.html",
+  "version": "1.0.1"
 }
