@@ -16,6 +16,7 @@ const selectedBook = ref<BibleBook | null>(null)
 const selectedChapter = ref<string[] | null>(null)
 const selectedChapterIndex = ref<number | null>(null)
 const isLoading = ref(true)
+const loadProgress = ref(0)
 const searchQuery = ref('')
 const currentView = ref<'books' | 'chapter' | 'verse'>('books')
 const copiedVerse = ref<{ book: string, chapter: number, verse: number } | null>(null)
@@ -26,7 +27,31 @@ const copiedVerse = ref<{ book: string, chapter: number, verse: number } | null>
 onMounted(async () => {
   try {
     const response = await fetch('/en_kjv.json')
-    bibleData.value = await response.json()
+    const reader = response.body.getReader()
+    const contentLength = response.headers.get('Content-Length')
+    let receivedLength = 0
+    const chunks = []
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done)
+        break
+
+      chunks.push(value)
+      receivedLength += value.length
+      const progress = (receivedLength / Number.parseInt(contentLength!)) * 100
+      loadProgress.value = Math.floor(progress)
+    }
+
+    const chunksAll = new Uint8Array(receivedLength)
+    let position = 0
+    for (const chunk of chunks) {
+      chunksAll.set(chunk, position)
+      position += chunk.length
+    }
+
+    const result = new TextDecoder('utf-8').decode(chunksAll)
+    bibleData.value = JSON.parse(result)
     isLoading.value = false
   }
   catch (error) {
@@ -135,6 +160,17 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
     <div v-if="isLoading" class="loading-state">
       <div class="spinner" />
       <p>Loading Bible...</p>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div
+            class="progress-fill"
+            :style="{ width: `${loadProgress}%` }"
+          />
+        </div>
+        <p class="progress-text">
+          {{ loadProgress }}% Complete
+        </p>
+      </div>
     </div>
 
     <!-- Books View -->
@@ -312,6 +348,30 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
   100% {
     transform: rotate(360deg);
   }
+}
+
+.progress-container {
+  margin-top: 1rem;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: white;
+  border-radius: 10px 0 0 10px;
+  transition: width 0.3s;
+}
+
+.progress-text {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
 }
 
 .search-section {
