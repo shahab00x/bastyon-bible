@@ -7,26 +7,124 @@ interface BibleBook {
   chapters: string[][]
 }
 
+interface BibleVersion {
+  id: string
+  name: string
+  fileName: string
+}
+
 defineOptions({
   name: 'BibleApp',
 })
 
+// Define available Bible versions
+const BIBLE_VERSIONS: BibleVersion[] = [
+  { id: 'en-kjv', name: 'English - KJV Bible', fileName: 'en_kjv.json' },
+  { id: 'ru-synodal', name: 'Russian - Synodal Bible', fileName: 'ru_synodal.json' },
+]
+
+// Reactive state
 const bibleData = ref<BibleBook[] | null>(null)
 const selectedBook = ref<BibleBook | null>(null)
 const selectedChapter = ref<string[] | null>(null)
 const selectedChapterIndex = ref<number | null>(null)
 const isLoading = ref(true)
+const isDownloading = ref(false)
 const loadProgress = ref(0)
 const searchQuery = ref('')
 const currentView = ref<'books' | 'chapter' | 'verse'>('books')
 const copiedVerse = ref<{ book: string, chapter: number, verse: number } | null>(null)
+const selectedVersion = ref<BibleVersion | null>(null)
+const hasUserSelectedVersion = ref(false)
 
-// No internal mapping needed since name and abbrev are in the JSON
+// Initialize with placeholder
+onMounted(() => {
+  const savedVersionId = localStorage.getItem('bibleVersion')
+  if (savedVersionId) {
+    const version = BIBLE_VERSIONS.find(v => v.id === savedVersionId)
+    if (version) {
+      selectedVersion.value = version
+      hasUserSelectedVersion.value = true
+      loadBibleData(version)
+    }
+  }
+  else {
+    // No saved version, show placeholder
+    isLoading.value = false
+  }
+})
+
+// IndexedDB setup for caching large Bible files
+const DB_NAME = 'BibleAppDB'
+const DB_VERSION = 1
+const STORE_NAME = 'bibleCache'
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve(request.result)
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result
+      if (!db.objectStoreNames.contains(STORE_NAME))
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' })
+    }
+  })
+}
+
+async function getCachedBible(versionId: string): Promise<BibleBook[] | null> {
+  try {
+    const db = await openDB()
+    const transaction = db.transaction(STORE_NAME, 'readonly')
+    const store = transaction.objectStore(STORE_NAME)
+    const request = store.get(versionId)
+
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => {
+        resolve(request.result ? request.result.data : null)
+      }
+      request.onerror = () => reject(request.error)
+    })
+  }
+  catch (error) {
+    console.error('Failed to get cached Bible from IndexedDB:', error)
+    return null
+  }
+}
+
+async function cacheBible(versionId: string, data: BibleBook[]): Promise<void> {
+  try {
+    const db = await openDB()
+    const transaction = db.transaction(STORE_NAME, 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    store.put({ id: versionId, data })
+  }
+  catch (error) {
+    console.error('Failed to cache Bible in IndexedDB:', error)
+  }
+}
 
 // Load Bible data from JSON
-onMounted(async () => {
+async function loadBibleData(version: BibleVersion) {
   try {
-    const response = await fetch('/en_kjv.json')
+    isDownloading.value = true
+    loadProgress.value = 0
+
+    // Check if we have cached data in IndexedDB
+    const cachedData = await getCachedBible(version.id)
+    if (cachedData) {
+      bibleData.value = cachedData
+      isLoading.value = false
+      isDownloading.value = false
+      return
+    }
+
+    const response = await fetch(`/${version.fileName}`)
+    if (!response.body)
+      throw new Error('Response body is null')
+
     const reader = response.body.getReader()
     const contentLength = response.headers.get('Content-Length')
     let receivedLength = 0
@@ -39,7 +137,9 @@ onMounted(async () => {
 
       chunks.push(value)
       receivedLength += value.length
-      const progress = (receivedLength / Number.parseInt(contentLength!)) * 100
+      const progress = contentLength
+        ? (receivedLength / Number.parseInt(contentLength)) * 100
+        : 0
       loadProgress.value = Math.floor(progress)
     }
 
@@ -51,14 +151,36 @@ onMounted(async () => {
     }
 
     const result = new TextDecoder('utf-8').decode(chunksAll)
-    bibleData.value = JSON.parse(result)
+    const parsedData = JSON.parse(result)
+
+    // Cache the data in IndexedDB
+    await cacheBible(version.id, parsedData)
+
+    bibleData.value = parsedData
     isLoading.value = false
+    isDownloading.value = false
   }
   catch (error) {
     console.error('Failed to load Bible data:', error)
     isLoading.value = false
+    isDownloading.value = false
   }
-})
+}
+
+// Handle version change
+function handleVersionChange(versionId: string) {
+  // Remove placeholder option
+  hasUserSelectedVersion.value = true
+
+  const version = BIBLE_VERSIONS.find(v => v.id === versionId)
+  if (version) {
+    selectedVersion.value = version
+    localStorage.setItem('bibleVersion', version.id)
+    bibleData.value = null
+    isLoading.value = true
+    loadBibleData(version)
+  }
+}
 
 // Filter books based on search query
 const filteredBooks = computed(() => {
@@ -141,9 +263,41 @@ function goToPreviousChapter() {
           <span class="icon">📖</span>
           Holy Bible
         </h1>
-        <p class="app-subtitle">
-          King James Version
-        </p>
+        <div class="version-selector">
+          <select
+            :value="selectedVersion?.id || ''"
+            class="version-dropdown"
+            :disabled="isDownloading"
+            @change="handleVersionChange(($event.target as HTMLSelectElement).value)"
+          >
+            <option
+              v-if="!hasUserSelectedVersion"
+              value=""
+            >
+              Select a version
+            </option>
+            <option
+              v-for="version in BIBLE_VERSIONS"
+              :key="version.id"
+              :value="version.id"
+            >
+              {{ version.name }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Progress bar -->
+        <div v-if="isDownloading" class="progress-container">
+          <div class="progress-bar">
+            <div
+              class="progress-fill"
+              :style="{ width: `${loadProgress}%` }"
+            />
+          </div>
+          <p class="progress-text">
+            Loading... {{ loadProgress }}%
+          </p>
+        </div>
       </div>
     </header>
 
@@ -333,6 +487,63 @@ function goToPreviousChapter() {
 .app-subtitle {
   opacity: 0.8;
   margin: 0.5rem 0 0 0;
+}
+
+.version-selector {
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.version-dropdown {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 1rem;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+  max-width: 300px;
+}
+
+.version-dropdown:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.version-dropdown option {
+  background: #667eea;
+  color: white;
+}
+
+.progress-container {
+  width: 100%;
+  max-width: 300px;
+  margin: 1rem auto;
+}
+
+.progress-bar {
+  height: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  text-align: center;
+  margin: 0.5rem 0 0 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
 }
 
 .breadcrumb-nav {
