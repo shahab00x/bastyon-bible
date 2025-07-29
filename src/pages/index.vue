@@ -81,12 +81,14 @@ function selectBook(book: BibleBook) {
   selectedChapter.value = null
   selectedChapterIndex.value = null
   currentView.value = 'chapter'
+  window.scrollTo(0, 0)
 }
 
 function selectChapter(chapterIndex: number) {
   selectedChapterIndex.value = chapterIndex
   selectedChapter.value = selectedBook.value?.chapters[chapterIndex] || null
   currentView.value = 'verse'
+  window.scrollTo(0, 0)
 }
 
 function goBack() {
@@ -101,32 +103,32 @@ function goBack() {
     selectedChapterIndex.value = null
     selectedBook.value = null
   }
+  window.scrollTo(0, 0)
 }
 
 function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, verseText: string) {
-  const chapterNumber = chapterIndex + 1
-  const verseNumber = verseIndex + 1
-  const text = `${verseText} - ${book.abbrev} ${chapterNumber}:${verseNumber}`
+  const textToCopy = `${verseText} - ${book.name} ${chapterIndex + 1}:${verseIndex + 1}`
+  navigator.clipboard.writeText(textToCopy)
+  copiedVerse.value = { book: book.abbrev, chapter: chapterIndex, verse: verseIndex }
+  setTimeout(() => {
+    copiedVerse.value = null
+  }, 2000)
+}
 
-  // Copy to clipboard
-  navigator.clipboard.writeText(text)
-    .then(() => {
-      console.log('Verse copied to clipboard')
-      // Set the copied verse reference
-      copiedVerse.value = { book: book.abbrev, chapter: chapterIndex, verse: verseIndex }
+function goToNextChapter() {
+  if (selectedBook.value && selectedChapterIndex.value !== null) {
+    const nextChapterIndex = selectedChapterIndex.value + 1
+    if (nextChapterIndex < selectedBook.value.chapters.length)
+      selectChapter(nextChapterIndex)
+  }
+}
 
-      // Clear the copied state after 2 seconds
-      setTimeout(() => {
-        if (copiedVerse.value
-          && copiedVerse.value.book === book.abbrev
-          && copiedVerse.value.chapter === chapterIndex
-          && copiedVerse.value.verse === verseIndex)
-          copiedVerse.value = null
-      }, 2000)
-    })
-    .catch((err) => {
-      console.error('Failed to copy: ', err)
-    })
+function goToPreviousChapter() {
+  if (selectedBook.value && selectedChapterIndex.value !== null) {
+    const prevChapterIndex = selectedChapterIndex.value - 1
+    if (prevChapterIndex >= 0)
+      selectChapter(prevChapterIndex)
+  }
 }
 </script>
 
@@ -225,6 +227,24 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
 
     <!-- Verse View -->
     <div v-else-if="currentView === 'verse' && selectedChapter" class="verse-view">
+      <div class="chapter-navigation-top">
+        <button
+          v-if="selectedChapterIndex !== null && selectedChapterIndex > 0"
+          class="nav-btn"
+          @click="goToPreviousChapter"
+        >
+          ← Previous Chapter
+        </button>
+        <span class="chapter-title">{{ selectedBook?.name }} {{ selectedChapterIndex !== null ? selectedChapterIndex + 1 : '' }}</span>
+        <button
+          v-if="selectedBook && selectedChapterIndex !== null && selectedChapterIndex < selectedBook.chapters.length - 1"
+          class="nav-btn"
+          @click="goToNextChapter"
+        >
+          Next Chapter →
+        </button>
+      </div>
+
       <div class="verses-list">
         <div
           v-for="(verseText, verseIndex) in selectedChapter"
@@ -246,6 +266,23 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
             </button>
           </div>
         </div>
+      </div>
+
+      <div class="chapter-navigation-bottom">
+        <button
+          v-if="selectedChapterIndex !== null && selectedChapterIndex > 0"
+          class="nav-btn"
+          @click="goToPreviousChapter"
+        >
+          ← Previous Chapter
+        </button>
+        <button
+          v-if="selectedBook && selectedChapterIndex !== null && selectedChapterIndex < selectedBook.chapters.length - 1"
+          class="nav-btn next-chapter-btn"
+          @click="goToNextChapter"
+        >
+          Next Chapter →
+        </button>
       </div>
     </div>
 
@@ -436,6 +473,48 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
   padding: 1rem;
 }
 
+.chapter-navigation-top,
+.chapter-navigation-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 1rem 0;
+  padding: 0.5rem;
+}
+
+.chapter-navigation-top {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.chapter-navigation-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  margin-top: 2rem;
+}
+
+.chapter-title {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.nav-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.3s;
+  font-weight: 500;
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.next-chapter-btn {
+  margin-left: auto;
+}
+
 .verses-list {
   display: flex;
   flex-direction: column;
@@ -514,6 +593,21 @@ function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, ve
   .verse-content {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .chapter-navigation-top,
+  .chapter-navigation-bottom {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .chapter-title {
+    order: -1;
+    margin-bottom: 0.5rem;
+  }
+
+  .next-chapter-btn {
+    margin-left: 0;
   }
 }
 </style>
