@@ -35,7 +35,11 @@ const searchQuery = ref('')
 const currentView = ref<'books' | 'chapter' | 'verse'>('books')
 const copiedVerse = ref<{ book: string, chapter: number, verse: number } | null>(null)
 const selectedVersion = ref<BibleVersion | null>(null)
-const hasUserSelectedVersion = ref(false)
+
+// Computed property for tracking if user has selected a version
+const hasUserSelectedVersion = computed(() => {
+  return selectedVersion.value !== null
+})
 
 // Initialize with placeholder
 onMounted(() => {
@@ -44,7 +48,6 @@ onMounted(() => {
     const version = BIBLE_VERSIONS.find(v => v.id === savedVersionId)
     if (version) {
       selectedVersion.value = version
-      hasUserSelectedVersion.value = true
       loadBibleData(version)
     }
   }
@@ -169,16 +172,44 @@ async function loadBibleData(version: BibleVersion) {
 
 // Handle version change
 function handleVersionChange(versionId: string) {
-  // Remove placeholder option
-  hasUserSelectedVersion.value = true
-
   const version = BIBLE_VERSIONS.find(v => v.id === versionId)
   if (version) {
     selectedVersion.value = version
     localStorage.setItem('bibleVersion', version.id)
     bibleData.value = null
     isLoading.value = true
-    loadBibleData(version)
+
+    // Store current view state for potential restoration
+    const wasViewingChapter = currentView.value === 'verse' && selectedBook.value && selectedChapterIndex.value !== null
+    const currentBook = selectedBook.value
+    const currentChapterIndex = selectedChapterIndex.value
+
+    loadBibleData(version).then(() => {
+      // If user was viewing a chapter, reload it
+      if (wasViewingChapter && currentBook && currentChapterIndex !== null) {
+        const newBook = bibleData.value?.find(book => book.name === currentBook.name)
+        if (newBook && newBook.chapters[currentChapterIndex]) {
+          selectedBook.value = newBook
+          selectedChapter.value = newBook.chapters[currentChapterIndex]
+          selectedChapterIndex.value = currentChapterIndex
+          currentView.value = 'verse'
+        }
+        else {
+          // Fallback to books view if chapter not found
+          currentView.value = 'books'
+          selectedBook.value = null
+          selectedChapter.value = null
+          selectedChapterIndex.value = null
+        }
+      }
+      else {
+        // Reset to books view for other cases
+        currentView.value = 'books'
+        selectedBook.value = null
+        selectedChapter.value = null
+        selectedChapterIndex.value = null
+      }
+    })
   }
 }
 
