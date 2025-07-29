@@ -110,7 +110,7 @@ async function cacheBible(versionId: string, data: BibleBook[]): Promise<void> {
 }
 
 // Load Bible data from JSON
-async function loadBibleData(version: BibleVersion) {
+async function loadBibleData(version: BibleVersion): Promise<void> {
   try {
     isDownloading.value = true
     loadProgress.value = 0
@@ -130,6 +130,7 @@ async function loadBibleData(version: BibleVersion) {
 
     const reader = response.body.getReader()
     const contentLength = response.headers.get('Content-Length')
+    const totalLength = contentLength ? Number.parseInt(contentLength) : 0
     let receivedLength = 0
     const chunks = []
 
@@ -140,10 +141,16 @@ async function loadBibleData(version: BibleVersion) {
 
       chunks.push(value)
       receivedLength += value.length
-      const progress = contentLength
-        ? (receivedLength / Number.parseInt(contentLength)) * 100
-        : 0
-      loadProgress.value = Math.floor(progress)
+
+      // Calculate progress even without Content-Length
+      if (totalLength > 0) {
+        const progress = (receivedLength / totalLength) * 100
+        loadProgress.value = Math.floor(progress)
+      }
+      else {
+        // Fallback: show incremental progress based on chunks received
+        loadProgress.value = Math.min(95, Math.floor(receivedLength / 10000)) // Approximate progress
+      }
     }
 
     const chunksAll = new Uint8Array(receivedLength)
@@ -162,11 +169,14 @@ async function loadBibleData(version: BibleVersion) {
     bibleData.value = parsedData
     isLoading.value = false
     isDownloading.value = false
+    loadProgress.value = 100 // Ensure it reaches 100%
   }
   catch (error) {
     console.error('Failed to load Bible data:', error)
     isLoading.value = false
     isDownloading.value = false
+    loadProgress.value = 0
+    throw error
   }
 }
 
