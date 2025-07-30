@@ -674,7 +674,14 @@ function handleTouchEnd(event: TouchEvent, index: number) {
           >
             <!-- Desktop drag handle -->
             <div v-if="!isMobile" class="drag-handle desktop" title="Drag to reorder">
-              ⋮⋮
+              <div class="drag-dots">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
             </div>
 
             <!-- Mobile drag handle -->
@@ -689,7 +696,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
               </div>
             </div>
 
-            <div class="clipboard-content">
+            <div class="clipboard-content" :style="isMobile ? { transform: `translateX(-${swipeOffset[index] || 0}px)` } : {}">
               <p class="clipboard-text">
                 {{ verse.text }}
               </p>
@@ -698,7 +705,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
             <!-- Desktop remove button -->
             <button
               v-if="!isMobile"
-              class="desktop clipboard-remove-btn"
+              class="clipboard-remove-btn"
               title="Remove verse"
               @click="removeFromClipboard(index)"
             >
@@ -706,9 +713,9 @@ function handleTouchEnd(event: TouchEvent, index: number) {
             </button>
 
             <!-- Mobile swipe delete overlay -->
-            <div v-if="isMobile" class="mobile-delete-overlay" :style="{ transform: `translateX(${swipeOffset[index] || 0}px)` }">
+            <div v-if="isMobile && (swipeOffset[index] || 0) > 0" class="mobile-delete-overlay">
               <div class="delete-action" @click="removeFromClipboard(index)">
-                <span>Delete</span>
+                <span class="delete-text">Delete</span>
               </div>
             </div>
           </li>
@@ -1170,16 +1177,16 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .drag-handle {
   cursor: move;
-  padding: 0 0.5rem;
-  color: #0066cc;
-  font-size: 1.2rem;
-  font-weight: bold;
+  padding: 0.5rem;
   user-select: none;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .drag-handle.desktop {
-  display: block;
+  color: #0066cc;
 }
 
 .drag-handle.desktop:hover {
@@ -1189,12 +1196,69 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .drag-handle.mobile {
   cursor: grab;
-  padding: 0.5rem;
-  color: #666;
-  user-select: none;
-  flex-shrink: 0;
-  display: none;
-  margin-top: auto;
+  color: #999;
+  display: flex;
+}
+
+.drag-dots {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 2px;
+  width: 12px;
+  height: 18px;
+}
+
+.drag-dots span {
+  width: 3px;
+  height: 3px;
+  background-color: currentColor;
+  border-radius: 50%;
+  opacity: 0.6;
+}
+
+.drag-handle:hover .drag-dots span {
+  opacity: 1;
+}
+
+.mobile-delete-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: #ff4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+  border-radius: 0 8px 8px 0;
+  z-index: 1;
+}
+
+.delete-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  cursor: pointer;
+  padding: 0 1rem;
+}
+
+.delete-text {
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.clipboard-content {
+  flex: 1;
+  position: relative;
+  z-index: 2;
+  background: inherit;
+  transition: transform 0.2s ease;
 }
 
 .footer-note {
