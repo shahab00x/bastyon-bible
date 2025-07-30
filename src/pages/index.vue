@@ -1039,13 +1039,14 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 .verses-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 .verse-card {
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 1.5rem;
+  border-radius: 5px;
+  padding: 0.3rem;
+  padding-top: 1rem;
 }
 
 .verse-content {
@@ -1377,11 +1378,6 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   .chapters-grid {
     grid-template-columns: 1fr;
   }
-
-  /* .verse-content {
-    flex-direction: column;
-    align-items: flex-start;
-  } */
 
   .chapter-navigation-top,
   .chapter-navigation-bottom {
