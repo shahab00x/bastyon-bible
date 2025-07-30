@@ -16,6 +16,7 @@ export class SdkService {
    *
    * @example
    * await SdkService.init();
+   * ******
    */
   public static async init(): Promise<void> {
     if (this.sdk) {
