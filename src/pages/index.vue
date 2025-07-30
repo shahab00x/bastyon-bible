@@ -51,6 +51,10 @@ const hasUserSelectedVersion = computed(() => {
   return selectedVersion.value !== null
 })
 
+function showDeleteOverlay(index: number) {
+  return isMobile.value && (swipeOffset.value[index] || 0) < -10 // Show on any leftward swipe
+}
+
 // Initialize with placeholder
 onMounted(() => {
   const savedVersionId = localStorage.getItem('bibleVersion')
@@ -717,13 +721,29 @@ function handleTouchEnd(event: TouchEvent, index: number) {
             </button>
 
             <!-- Mobile swipe delete overlay -->
-            <div v-if="isMobile && Math.abs(swipeOffset[index] || 0) > 60" class="mobile-delete-overlay" :class="{ show: Math.abs(swipeOffset[index] || 0) > 60 }">
-              <div class="delete-action" @click="removeFromClipboard(index)">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-                <span class="delete-text">Delete</span>
+            <div class="swipe-container" style="position: relative; overflow: hidden;">
+              <!-- Delete overlay (appears behind) -->
+              <div
+                v-if="showDeleteOverlay(index)"
+                class="mobile-delete-overlay"
+                :class="{ show: Math.abs(swipeOffset[index] || 0) > 60 }"
+              >
+                <div class="delete-action" @click="removeFromClipboard(index)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                  <span class="delete-text">Delete</span>
+                </div>
+              </div>
+
+              <!-- Your swipeable item (appears on top) -->
+              <div
+                class="swipe-item"
+                :style="{ transform: `translateX(${swipeOffset[index] || 0}px)` }"
+                style="position: relative; z-index: 2; background: white;"
+              >
+                <!-- Your item content here -->
               </div>
             </div>
           </li>
@@ -1273,13 +1293,36 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   top: 0;
   right: 0;
   bottom: 0;
-  background: #ff4444;
+  width: 80px; /* Fixed width for delete area */
+  background-color: #ef4444; /* Red background */
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 80px;
-  border-radius: 0 8px 8px 0;
-  z-index: 1;
+  z-index: 1; /* Behind the swipeable item */
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.mobile-delete-overlay.show {
+  opacity: 1;
+}
+
+.delete-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  cursor: pointer;
+  padding: 0 1rem;
+  gap: 4px;
+}
+
+.delete-text {
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .delete-action {
