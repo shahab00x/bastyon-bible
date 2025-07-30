@@ -1163,6 +1163,15 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   letter-spacing: -0.5px;
 }
 
+.clipboard-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #2c3e50;
+  flex: 1;
+  word-break: break-word;
+}
+
 .clipboard-list {
   list-style: none;
   padding: 0;
@@ -1327,6 +1336,29 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
   .next-chapter-btn {
     margin-left: 0;
+  }
+
+  /* Mobile clipboard ribbon positioning */
+  .clipboard-ribbon {
+    bottom: 15px;
+    right: 15px;
+    left: 15px;
+    max-width: none;
+  }
+
+  .clipboard-panel {
+    position: fixed;
+    bottom: 80px;
+    left: 15px;
+    right: 15px;
+    width: auto;
+    max-width: none;
+    max-height: 60vh;
+  }
+
+  .clipboard-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>
