@@ -389,7 +389,7 @@ function handleTouchStart(event: TouchEvent, index: number) {
         htmlItem.style.opacity = '0.7'
         htmlItem.style.transform = 'scale(1.02)'
       }
-    }, 500)
+    }, 300) // Reduced from 500ms for better responsiveness
   }
 }
 
@@ -672,31 +672,31 @@ function handleTouchEnd(event: TouchEvent, index: number) {
             @touchmove.passive="handleTouchMove($event, index)"
             @touchend.passive="handleTouchEnd($event, index)"
           >
-            <!-- Desktop drag handle -->
+            <!-- Desktop drag handle - always visible -->
             <div v-if="!isMobile" class="drag-handle desktop" title="Drag to reorder">
-              <div class="drag-dots">
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="9" cy="5" r="1" />
+                <circle cx="9" cy="12" r="1" />
+                <circle cx="9" cy="19" r="1" />
+                <circle cx="15" cy="5" r="1" />
+                <circle cx="15" cy="12" r="1" />
+                <circle cx="15" cy="19" r="1" />
+              </svg>
             </div>
 
             <!-- Mobile drag handle -->
-            <div v-if="isMobile" class="drag-handle mobile" title="Long press to drag">
-              <div class="drag-dots">
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
+            <div v-if="isMobile" class="drag-handle mobile" title="Swipe left to delete">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="9" cy="5" r="1" />
+                <circle cx="9" cy="12" r="1" />
+                <circle cx="9" cy="19" r="1" />
+                <circle cx="15" cy="5" r="1" />
+                <circle cx="15" cy="12" r="1" />
+                <circle cx="15" cy="19" r="1" />
+              </svg>
             </div>
 
-            <div class="clipboard-content" :style="isMobile ? { transform: `translateX(-${swipeOffset[index] || 0}px)` } : {}">
+            <div class="clipboard-content" :style="isMobile ? { transform: `translateX(${swipeOffset[index] || 0}px)` } : {}">
               <p class="clipboard-text">
                 {{ verse.text }}
               </p>
@@ -709,12 +709,19 @@ function handleTouchEnd(event: TouchEvent, index: number) {
               title="Remove verse"
               @click="removeFromClipboard(index)"
             >
-              ✕
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
 
             <!-- Mobile swipe delete overlay -->
-            <div v-if="isMobile && (swipeOffset[index] || 0) > 0" class="mobile-delete-overlay">
+            <div v-if="isMobile && Math.abs(swipeOffset[index] || 0) > 60" class="mobile-delete-overlay" :class="{ show: Math.abs(swipeOffset[index] || 0) > 60 }">
               <div class="delete-action" @click="removeFromClipboard(index)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
                 <span class="delete-text">Delete</span>
               </div>
             </div>
@@ -1068,136 +1075,166 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .clipboard-ribbon {
   position: fixed;
-  top: 0;
-  right: 0;
-  padding: 1rem;
-  background: #ffffff;
-  border: 2px solid #0066cc;
-  border-radius: 0 0 0 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  bottom: 20px;
+  right: 20px;
   z-index: 1000;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .clipboard-btn {
-  background: #0066cc;
-  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 30px;
   cursor: pointer;
-  transition: background 0.3s;
-  font-weight: 500;
-  font-size: 0.9rem;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.clipboard-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.clipboard-btn:hover::before {
+  left: 100%;
 }
 
 .clipboard-btn:hover {
-  background: #0052a3;
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+}
+
+.clipboard-btn:active {
+  transform: translateY(-1px) scale(1.02);
 }
 
 .clipboard-panel {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: #ffffff;
-  border: 1px solid #0066cc;
-  border-radius: 8px;
-  max-width: 300px;
-  overflow-y: auto;
-  max-height: 300px;
+  position: absolute;
+  bottom: 70px;
+  right: 0;
+  width: 320px;
+  max-height: 450px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  backdrop-filter: blur(10px);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .clipboard-title {
-  color: #000000;
-  font-weight: bold;
-  font-size: 1.1rem;
-  margin: 0 0 0.5rem 0;
+  padding: 20px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #2c3e50;
+  border-bottom: 1px solid #f1f2f6;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  letter-spacing: -0.5px;
 }
 
 .clipboard-list {
   list-style: none;
   padding: 0;
   margin: 0;
+  max-height: 350px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.clipboard-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.clipboard-list::-webkit-scrollbar-track {
+  background: #f7fafc;
+}
+
+.clipboard-list::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.clipboard-list::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .clipboard-item {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  color: #000000;
-  transition: border-top 0.2s ease;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #f1f2f6;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   position: relative;
-  touch-action: pan-y;
+  background: white;
+}
+
+.clipboard-item:last-child {
+  border-bottom: none;
+}
+
+.clipboard-item:hover {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  transform: translateX(2px);
 }
 
 .clipboard-item.dragging {
-  opacity: 0.7;
-  transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  opacity: 0.8;
+  transform: scale(1.02) rotate(2deg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
 }
 
-.clipboard-item.mobile-view:active {
-  transform: scale(0.98);
-}
-
-.clipboard-item[data-swipe-start='true'] {
-  transition:
-    transform 0.2s ease,
-    opacity 0.2s ease;
-}
-
-.clipboard-text {
-  color: #000000;
-  margin: 0;
-  flex: 1;
-  padding: 0 0.5rem;
-}
-
-.clipboard-remove-btn {
-  background: #ff4444;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.clipboard-remove-btn:hover {
-  background: #cc0000;
+.clipboard-item.dragging .drag-handle {
+  cursor: grabbing;
 }
 
 .drag-handle {
-  cursor: move;
-  padding: 0.5rem;
-  user-select: none;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.drag-handle.desktop {
-  color: #0066cc;
-}
-
-.drag-handle.desktop:hover {
-  background: rgba(0, 102, 204, 0.1);
-  border-radius: 4px;
-}
-
-.drag-handle.mobile {
   cursor: grab;
-  color: #999;
-  display: flex;
+  margin-right: 15px;
+  color: #a0aec0;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  touch-action: none;
+}
+
+.drag-handle:hover {
+  color: #667eea;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .drag-dots {
