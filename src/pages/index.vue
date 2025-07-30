@@ -35,6 +35,10 @@ const searchQuery = ref('')
 const currentView = ref<'books' | 'chapter' | 'verse'>('books')
 const copiedVerse = ref<{ book: string, chapter: number, verse: number } | null>(null)
 const selectedVersion = ref<BibleVersion | null>(null)
+const clipboardVerses = ref<Array<{ text: string, book: string, chapter: number, verse: number, id: string }>>([])
+const showClipboardRibbon = ref(false)
+const isClipboardOpen = ref(false)
+const draggedItem = ref<number | null>(null)
 
 // Computed property for tracking if user has selected a version
 const hasUserSelectedVersion = computed(() => {
@@ -271,11 +275,54 @@ function goBack() {
 
 function copyVerse(book: BibleBook, chapterIndex: number, verseIndex: number, verseText: string) {
   const textToCopy = `${verseText} - ${book.name} ${chapterIndex + 1}:${verseIndex + 1}`
-  navigator.clipboard.writeText(textToCopy)
+  const verseId = `${book.abbrev}-${chapterIndex}-${verseIndex}-${Date.now()}`
+
+  // Add to clipboard array
+  clipboardVerses.value.push({
+    text: textToCopy,
+    book: book.abbrev,
+    chapter: chapterIndex,
+    verse: verseIndex,
+    id: verseId,
+  })
+
+  // Update system clipboard with all verses
+  updateSystemClipboard()
+
+  // Show ribbon
+  showClipboardRibbon.value = true
+
+  // Keep existing feedback
   copiedVerse.value = { book: book.abbrev, chapter: chapterIndex, verse: verseIndex }
   setTimeout(() => {
     copiedVerse.value = null
   }, 2000)
+}
+
+function updateSystemClipboard() {
+  const allText = clipboardVerses.value.map(v => v.text).join('\n')
+  navigator.clipboard.writeText(allText)
+}
+
+function removeFromClipboard(index: number) {
+  clipboardVerses.value.splice(index, 1)
+  updateSystemClipboard()
+
+  // Hide ribbon if empty
+  if (clipboardVerses.value.length === 0) {
+    showClipboardRibbon.value = false
+    isClipboardOpen.value = false
+  }
+}
+
+function reorderVerses(fromIndex: number, toIndex: number) {
+  const verse = clipboardVerses.value.splice(fromIndex, 1)[0]
+  clipboardVerses.value.splice(toIndex, 0, verse)
+  updateSystemClipboard()
+}
+
+function toggleClipboard() {
+  isClipboardOpen.value = !isClipboardOpen.value
 }
 
 function goToNextChapter() {
@@ -292,6 +339,25 @@ function goToPreviousChapter() {
     if (prevChapterIndex >= 0)
       selectChapter(prevChapterIndex)
   }
+}
+
+function handleDragStart(index: number) {
+  draggedItem.value = index
+}
+
+function handleDragOver(event: DragEvent, _index: number) {
+  event.preventDefault()
+}
+
+function handleDrop(index: number) {
+  if (draggedItem.value !== null) {
+    reorderVerses(draggedItem.value, index)
+    draggedItem.value = null
+  }
+}
+
+function handleDragEnd() {
+  draggedItem.value = null
 }
 </script>
 
@@ -478,6 +544,45 @@ function goToPreviousChapter() {
         >
           Next Chapter →
         </button>
+      </div>
+    </div>
+
+    <!-- Clipboard Ribbon -->
+    <div v-if="showClipboardRibbon" class="clipboard-ribbon">
+      <button class="clipboard-btn" @click="toggleClipboard">
+        {{ isClipboardOpen ? 'Hide Clipboard' : 'Show Clipboard' }}
+      </button>
+      <div v-if="isClipboardOpen" class="clipboard-panel">
+        <h3 class="clipboard-title">
+          Copied Verses
+        </h3>
+        <ul class="clipboard-list">
+          <li
+            v-for="(verse, index) in clipboardVerses"
+            :key="verse.id"
+            class="clipboard-item"
+            :class="{ dragging: draggedItem === index }"
+            draggable="true"
+            @dragstart="handleDragStart(index)"
+            @dragover="handleDragOver($event, index)"
+            @drop="handleDrop(index)"
+            @dragend="handleDragEnd"
+          >
+            <div class="drag-handle" title="Drag to reorder">
+              ⋮
+            </div>
+            <p class="clipboard-text">
+              {{ verse.text }}
+            </p>
+            <button
+              class="clipboard-remove-btn"
+              title="Remove verse"
+              @click="removeFromClipboard(index)"
+            >
+              ✕
+            </button>
+          </li>
+        </ul>
       </div>
     </div>
 
@@ -822,6 +927,105 @@ function goToPreviousChapter() {
 .copy-btn.copied {
   opacity: 1;
   color: #34c759;
+}
+
+.clipboard-ribbon {
+  position: fixed;
+  top: 0;
+  right: 0;
+  padding: 1rem;
+  background: #ffffff;
+  border: 2px solid #0066cc;
+  border-radius: 0 0 0 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.clipboard-btn {
+  background: #0066cc;
+  border: none;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.3s;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.clipboard-btn:hover {
+  background: #0052a3;
+}
+
+.clipboard-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #ffffff;
+  border: 1px solid #0066cc;
+  border-radius: 8px;
+  max-width: 300px;
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+.clipboard-title {
+  color: #000000;
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.clipboard-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.clipboard-item {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.clipboard-item:last-child {
+  border-bottom: none;
+}
+
+.clipboard-text {
+  color: #000000;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  flex: 1;
+  margin-right: 0.5rem;
+}
+
+.clipboard-remove-btn {
+  background: #ff0000;
+  border: none;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.3s;
+  min-width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clipboard-remove-btn:hover {
+  background: #cc0000;
+}
+
+.drag-handle {
+  font-size: 1.2rem;
+  margin-right: 0.5rem;
+  cursor: move;
 }
 
 .app-footer {
