@@ -41,13 +41,19 @@ export class BibleService {
   async fetchBibleData(version: string): Promise<BibleData> {
     const cacheKey = `bible_${version}`
 
-    // Check IndexedDB cache first
+    // Check memory cache first
+    if (this.bibleData.has(cacheKey))
+      return this.bibleData.get(cacheKey)!
+
+    // Check IndexedDB cache
     const cached = await this.getFromCache(cacheKey)
-    if (cached)
+    if (cached) {
+      this.bibleData.set(cacheKey, cached)
       return cached
+    }
 
     try {
-      const baseUrl = 'https://bible-api.com'
+      const baseUrl = this.corsProxy ? `${this.corsProxy}/https://bible-api.com` : 'https://bible-api.com'
       const url = `${baseUrl}/${version}`
 
       const response = await fetch(url, {
@@ -65,7 +71,8 @@ export class BibleService {
 
       const data = await response.json()
 
-      // Cache the response
+      // Cache in memory and IndexedDB
+      this.bibleData.set(cacheKey, data)
       await this.cacheData(cacheKey, data)
 
       return data
@@ -75,8 +82,10 @@ export class BibleService {
 
       // Try fallback URLs or cached data
       const fallbackData = await this.getFallbackData(version)
-      if (fallbackData)
+      if (fallbackData) {
+        this.bibleData.set(cacheKey, fallbackData)
         return fallbackData
+      }
 
       throw new Error(`Unable to load Bible data for ${version}`)
     }
