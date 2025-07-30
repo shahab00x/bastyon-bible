@@ -407,17 +407,21 @@ function handleTouchMove(event: TouchEvent, index: number) {
   const deltaX = touchStartX.value - touchX
   const deltaY = Math.abs(touchStartY.value - touchY)
 
+  // Only handle horizontal swipes and prevent scrolling
+  if (Math.abs(deltaX) > deltaY && Math.abs(deltaX) > 10) {
+    event.preventDefault()
+
+    // Only allow leftward swipes (deltaX > 0) and limit distance
+    if (deltaX > 0 && isMobile.value)
+      swipeOffset.value[index] = -Math.min(deltaX, 100)
+  }
+
   // Clear long press timer if movement detected
   if (Math.abs(deltaX) > 10 || deltaY > 10) {
     if (longPressTimer.value) {
       clearTimeout(longPressTimer.value)
       longPressTimer.value = null
     }
-  }
-
-  if (isMobile.value && isDragging.value && draggedItem.value !== null) {
-    // Mobile swipe-to-delete
-    swipeOffset.value[index] = Math.max(0, deltaX)
   }
 }
 
@@ -667,84 +671,75 @@ function handleTouchEnd(event: TouchEvent, index: number) {
             class="clipboard-item"
             :class="{ 'dragging': draggedItem === index, 'mobile-view': isMobile }"
             :draggable="!isMobile"
-            :data-clipboard-index="index"
             @dragstart="!isMobile && handleDragStart(index)"
             @dragover="!isMobile && handleDragOver($event, index)"
             @drop="!isMobile && handleDrop(index)"
             @dragend="!isMobile && handleDragEnd"
             @touchstart.passive="handleTouchStart($event, index)"
-            @touchmove.passive="handleTouchMove($event, index)"
+            @touchmove="handleTouchMove($event, index)"
             @touchend.passive="handleTouchEnd($event, index)"
           >
-            <!-- Desktop drag handle - always visible -->
-            <div v-if="!isMobile" class="drag-handle desktop" title="Drag to reorder">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="9" cy="5" r="1" />
-                <circle cx="9" cy="12" r="1" />
-                <circle cx="9" cy="19" r="1" />
-                <circle cx="15" cy="5" r="1" />
-                <circle cx="15" cy="12" r="1" />
-                <circle cx="15" cy="19" r="1" />
-              </svg>
+            <!-- Delete overlay (appears behind) - MOBILE ONLY -->
+            <div
+              v-if="isMobile && showDeleteOverlay(index)"
+              class="mobile-delete-overlay"
+              :class="{ show: Math.abs(swipeOffset[index] || 0) > 60 }"
+            >
+              <div class="delete-action" @click="removeFromClipboard(index)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span class="delete-text">Delete</span>
+              </div>
             </div>
 
-            <!-- Mobile drag handle -->
-            <div v-if="isMobile" class="drag-handle mobile" title="Swipe left to delete">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="9" cy="5" r="1" />
-                <circle cx="9" cy="12" r="1" />
-                <circle cx="9" cy="19" r="1" />
-                <circle cx="15" cy="5" r="1" />
-                <circle cx="15" cy="12" r="1" />
-                <circle cx="15" cy="19" r="1" />
-              </svg>
-            </div>
+            <!-- Main content (appears on top) -->
+            <div
+              class="clipboard-content"
+              :style="isMobile ? { transform: `translateX(${Math.min(0, swipeOffset[index] || 0)}px)` } : {}"
+            >
+              <!-- Desktop drag handle -->
+              <div v-if="!isMobile" class="drag-handle desktop" title="Drag to reorder">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="9" cy="5" r="1" />
+                  <circle cx="9" cy="12" r="1" />
+                  <circle cx="9" cy="19" r="1" />
+                  <circle cx="15" cy="5" r="1" />
+                  <circle cx="15" cy="12" r="1" />
+                  <circle cx="15" cy="19" r="1" />
+                </svg>
+              </div>
 
-            <div class="clipboard-content" :style="isMobile ? { transform: `translateX(${swipeOffset[index] || 0}px)` } : {}">
+              <!-- Mobile drag handle -->
+              <div v-if="isMobile" class="drag-handle mobile" title="Swipe left to delete">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="9" cy="5" r="1" />
+                  <circle cx="9" cy="12" r="1" />
+                  <circle cx="9" cy="19" r="1" />
+                  <circle cx="15" cy="5" r="1" />
+                  <circle cx="15" cy="12" r="1" />
+                  <circle cx="15" cy="19" r="1" />
+                </svg>
+              </div>
+
               <p class="clipboard-text">
                 {{ verse.text }}
               </p>
-            </div>
 
-            <!-- Desktop remove button -->
-            <button
-              v-if="!isMobile"
-              class="clipboard-remove-btn"
-              title="Remove verse"
-              style="background-color: #dc2626; color: white;"
-              @click="removeFromClipboard(index)"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <!-- Mobile swipe delete overlay -->
-            <div class="swipe-container" style="position: relative; overflow: hidden;">
-              <!-- Delete overlay (appears behind) -->
-              <div
-                v-if="showDeleteOverlay(index)"
-                class="mobile-delete-overlay"
-                :class="{ show: Math.abs(swipeOffset[index] || 0) > 60 }"
+              <!-- Desktop remove button - RED X -->
+              <button
+                v-if="!isMobile"
+                class="clipboard-remove-btn"
+                title="Remove verse"
+                style="background-color: #dc2626; color: white;"
+                @click="removeFromClipboard(index)"
               >
-                <div class="delete-action" @click="removeFromClipboard(index)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                  <span class="delete-text">Delete</span>
-                </div>
-              </div>
-
-              <!-- Your swipeable item (appears on top) -->
-              <div
-                class="swipe-item"
-                :style="{ transform: `translateX(${swipeOffset[index] || 0}px)` }"
-                style="position: relative; z-index: 2; background: white;"
-              >
-                <!-- Your item content here -->
-              </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
             </div>
           </li>
         </ul>
@@ -1185,12 +1180,27 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 }
 
 .clipboard-text {
+  flex: 1; /* Take up remaining space */
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
   color: #2c3e50;
-  flex: 1;
   word-break: break-word;
+}
+
+.clipboard-remove-btn {
+  background-color: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0; /* Prevent button from shrinking */
+  width: 32px;
+  height: 32px;
 }
 
 .clipboard-list {
@@ -1221,13 +1231,42 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 }
 
 .clipboard-item {
+  position: relative;
+  overflow: hidden;
+  /* other existing styles */
+}
+
+.mobile-delete-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 80px;
+  background-color: #ef4444;
+  color: white;
   display: flex;
   align-items: center;
-  padding: 15px 20px;
-  border-bottom: 1px solid #f1f2f6;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  justify-content: center;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.mobile-delete-overlay.show {
+  opacity: 1;
+}
+
+.clipboard-content {
   position: relative;
+  z-index: 2;
   background: white;
+  transition: transform 0.2s ease;
+  display: flex;
+  flex-direction: row; /* Ensure horizontal layout */
+  align-items: center; /* Center items vertically */
+  gap: 15px;
+  padding: 15px 20px;
+  /* other existing styles */
 }
 
 .clipboard-item:last-child {
@@ -1288,26 +1327,6 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   opacity: 1;
 }
 
-.mobile-delete-overlay {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 80px; /* Fixed width for delete area */
-  background-color: #ef4444; /* Red background */
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1; /* Behind the swipeable item */
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.mobile-delete-overlay.show {
-  opacity: 1;
-}
-
 .delete-action {
   display: flex;
   flex-direction: column;
@@ -1341,14 +1360,6 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-.clipboard-content {
-  flex: 1;
-  position: relative;
-  z-index: 2;
-  background: inherit;
-  transition: transform 0.2s ease;
 }
 
 .footer-note {
