@@ -39,6 +39,8 @@ const clipboardVerses = ref<Array<{ text: string, book: string, chapter: number,
 const showClipboardRibbon = ref(false)
 const isClipboardOpen = ref(false)
 const draggedItem = ref<number | null>(null)
+const touchStartX = ref<number>(0)
+const touchStartY = ref<number>(0)
 
 // Computed property for tracking if user has selected a version
 const hasUserSelectedVersion = computed(() => {
@@ -359,6 +361,79 @@ function handleDrop(index: number) {
 function handleDragEnd() {
   draggedItem.value = null
 }
+
+// Enhanced swipe-to-delete with visual feedback
+function handleTouchStartDelete(event: TouchEvent, _index: number) {
+  touchStartX.value = event.touches[0].clientX
+  touchStartY.value = event.touches[0].clientY
+
+  // Add data attribute for styling
+  const target = event.target as HTMLElement
+  const item = target.closest('.clipboard-item')
+  if (item) {
+    const htmlItem = item as HTMLElement
+    htmlItem.setAttribute('data-swipe-start', 'true')
+  }
+}
+
+function handleTouchMoveDelete(event: TouchEvent, _index: number) {
+  if (!touchStartX.value || !touchStartY.value)
+    return
+
+  const touchX = event.touches[0].clientX
+  const touchY = event.touches[0].clientY
+
+  const deltaX = touchStartX.value - touchX
+  const deltaY = Math.abs(touchStartY.value - touchY)
+
+  // Only apply horizontal swipe effect
+  if (Math.abs(deltaX) > 10 && deltaY < 50) {
+    const target = event.target as HTMLElement
+    const item = target.closest('.clipboard-item')
+    if (item) {
+      // Apply transform for visual feedback
+      const htmlItem = item as HTMLElement
+      htmlItem.style.transform = `translateX(${-deltaX}px)`
+      htmlItem.style.opacity = `${1 - Math.abs(deltaX) / 200}`
+      htmlItem.style.transition = 'none'
+    }
+  }
+}
+
+function handleTouchEndDelete(event: TouchEvent, index: number) {
+  if (!touchStartX.value || !touchStartY.value)
+    return
+
+  const touchEndX = event.changedTouches[0].clientX
+  const touchEndY = event.changedTouches[0].clientY
+
+  const deltaX = touchStartX.value - touchEndX
+  const deltaY = Math.abs(touchStartY.value - touchEndY)
+
+  // Reset styles
+  const target = event.target as HTMLElement
+  const item = target.closest('.clipboard-item')
+  if (item) {
+    const htmlItem = item as HTMLElement
+    htmlItem.style.transform = ''
+    htmlItem.style.opacity = ''
+    htmlItem.style.transition = ''
+    htmlItem.removeAttribute('data-swipe-start')
+  }
+
+  // Check for horizontal swipe (more horizontal than vertical movement)
+  if (Math.abs(deltaX) > 50 && deltaY < 30) {
+    // Swipe left to delete
+    if (deltaX > 0) {
+      // Auto-delete without confirmation for better UX
+      removeFromClipboard(index)
+    }
+  }
+
+  // Reset touch coordinates
+  touchStartX.value = 0
+  touchStartY.value = 0
+}
 </script>
 
 <template>
@@ -550,7 +625,7 @@ function handleDragEnd() {
     <!-- Clipboard Ribbon -->
     <div v-if="showClipboardRibbon" class="clipboard-ribbon">
       <button class="clipboard-btn" @click="toggleClipboard">
-        {{ isClipboardOpen ? 'Hide Clipboard' : 'Show Clipboard' }}
+        {{ isClipboardOpen ? 'Hide Clipboard' : `Clipboard (${clipboardVerses.length})` }}
       </button>
       <div v-if="isClipboardOpen" class="clipboard-panel">
         <h3 class="clipboard-title">
@@ -563,10 +638,14 @@ function handleDragEnd() {
             class="clipboard-item"
             :class="{ dragging: draggedItem === index }"
             draggable="true"
+            :data-clipboard-index="index"
             @dragstart="handleDragStart(index)"
             @dragover="handleDragOver($event, index)"
             @drop="handleDrop(index)"
             @dragend="handleDragEnd"
+            @touchstart.passive="handleTouchStartDelete($event, index)"
+            @touchmove.passive="handleTouchMoveDelete($event, index)"
+            @touchend="handleTouchEndDelete($event, index)"
           >
             <div class="drag-handle" title="Drag to reorder">
               ⋮
@@ -982,40 +1061,53 @@ function handleDragEnd() {
 }
 
 .clipboard-item {
-  padding: 0.75rem;
-  border-bottom: 1px solid #e0e0e0;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: #000000;
+  transition: border-top 0.2s ease;
 }
 
 .clipboard-item:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.clipboard-item.dragging {
+  background: rgba(0, 102, 204, 0.1);
+  opacity: 0.8;
+}
+
+.clipboard-item[data-swipe-start='true'] {
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .clipboard-text {
   color: #000000;
   margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.4;
   flex: 1;
-  margin-right: 0.5rem;
+  padding: 0 0.5rem;
 }
 
 .clipboard-remove-btn {
-  background: #ff0000;
-  border: none;
+  background: #ff4444;
   color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: background 0.3s;
-  min-width: 24px;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .clipboard-remove-btn:hover {
@@ -1023,9 +1115,18 @@ function handleDragEnd() {
 }
 
 .drag-handle {
-  font-size: 1.2rem;
-  margin-right: 0.5rem;
   cursor: move;
+  padding: 0 0.5rem;
+  color: #0066cc;
+  font-size: 1.2rem;
+  font-weight: bold;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.drag-handle:hover {
+  background: rgba(0, 102, 204, 0.1);
+  border-radius: 4px;
 }
 
 .app-footer {
