@@ -41,6 +41,10 @@ const isClipboardOpen = ref(false)
 const draggedItem = ref<number | null>(null)
 const touchStartX = ref<number>(0)
 const touchStartY = ref<number>(0)
+const isMobile = ref(false)
+const swipeOffset = ref<Record<number, number>>({})
+const longPressTimer = ref<number | null>(null)
+const isDragging = ref(false)
 
 // Computed property for tracking if user has selected a version
 const hasUserSelectedVersion = computed(() => {
@@ -61,6 +65,8 @@ onMounted(() => {
     // No saved version, show placeholder
     isLoading.value = false
   }
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
 })
 
 // IndexedDB setup for caching large Bible files
@@ -362,21 +368,32 @@ function handleDragEnd() {
   draggedItem.value = null
 }
 
-// Enhanced swipe-to-delete with visual feedback
-function handleTouchStartDelete(event: TouchEvent, _index: number) {
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 768
+}
+
+function handleTouchStart(event: TouchEvent, index: number) {
   touchStartX.value = event.touches[0].clientX
   touchStartY.value = event.touches[0].clientY
 
-  // Add data attribute for styling
-  const target = event.target as HTMLElement
-  const item = target.closest('.clipboard-item')
-  if (item) {
-    const htmlItem = item as HTMLElement
-    htmlItem.setAttribute('data-swipe-start', 'true')
+  if (isMobile.value) {
+    // Start long press timer for drag initiation
+    longPressTimer.value = window.setTimeout(() => {
+      draggedItem.value = index
+      isDragging.value = true
+
+      const target = event.target as HTMLElement
+      const item = target.closest('.clipboard-item')
+      if (item) {
+        const htmlItem = item as HTMLElement
+        htmlItem.style.opacity = '0.7'
+        htmlItem.style.transform = 'scale(1.02)'
+      }
+    }, 500)
   }
 }
 
-function handleTouchMoveDelete(event: TouchEvent, _index: number) {
+function handleTouchMove(event: TouchEvent, index: number) {
   if (!touchStartX.value || !touchStartY.value)
     return
 
@@ -386,23 +403,25 @@ function handleTouchMoveDelete(event: TouchEvent, _index: number) {
   const deltaX = touchStartX.value - touchX
   const deltaY = Math.abs(touchStartY.value - touchY)
 
-  // Only apply horizontal swipe effect
-  if (Math.abs(deltaX) > 10 && deltaY < 50) {
-    const target = event.target as HTMLElement
-    const item = target.closest('.clipboard-item')
-    if (item) {
-      // Apply transform for visual feedback
-      const htmlItem = item as HTMLElement
-      htmlItem.style.transform = `translateX(${-deltaX}px)`
-      htmlItem.style.opacity = `${1 - Math.abs(deltaX) / 200}`
-      htmlItem.style.transition = 'none'
+  // Clear long press timer if movement detected
+  if (Math.abs(deltaX) > 10 || deltaY > 10) {
+    if (longPressTimer.value) {
+      clearTimeout(longPressTimer.value)
+      longPressTimer.value = null
     }
+  }
+
+  if (isMobile.value && isDragging.value && draggedItem.value !== null) {
+    // Mobile swipe-to-delete
+    swipeOffset.value[index] = Math.max(0, deltaX)
   }
 }
 
-function handleTouchEndDelete(event: TouchEvent, index: number) {
-  if (!touchStartX.value || !touchStartY.value)
-    return
+function handleTouchEnd(event: TouchEvent, index: number) {
+  if (longPressTimer.value) {
+    clearTimeout(longPressTimer.value)
+    longPressTimer.value = null
+  }
 
   const touchEndX = event.changedTouches[0].clientX
   const touchEndY = event.changedTouches[0].clientY
@@ -415,22 +434,28 @@ function handleTouchEndDelete(event: TouchEvent, index: number) {
   const item = target.closest('.clipboard-item')
   if (item) {
     const htmlItem = item as HTMLElement
-    htmlItem.style.transform = ''
     htmlItem.style.opacity = ''
-    htmlItem.style.transition = ''
-    htmlItem.removeAttribute('data-swipe-start')
+    htmlItem.style.transform = ''
   }
 
-  // Check for horizontal swipe (more horizontal than vertical movement)
-  if (Math.abs(deltaX) > 50 && deltaY < 30) {
-    // Swipe left to delete
-    if (deltaX > 0) {
-      // Auto-delete without confirmation for better UX
-      removeFromClipboard(index)
+  if (isMobile.value) {
+    if (isDragging.value && draggedItem.value !== null) {
+      // End drag mode
+      isDragging.value = false
+      draggedItem.value = null
+    }
+    else if (!isDragging.value) {
+      // Handle swipe-to-delete
+      if (Math.abs(deltaX) > 50 && deltaY < 30 && deltaX > 0) {
+        removeFromClipboard(index)
+      }
+      else {
+        // Reset swipe offset
+        swipeOffset.value[index] = 0
+      }
     }
   }
 
-  // Reset touch coordinates
   touchStartX.value = 0
   touchStartY.value = 0
 }
@@ -636,30 +661,56 @@ function handleTouchEndDelete(event: TouchEvent, index: number) {
             v-for="(verse, index) in clipboardVerses"
             :key="verse.id"
             class="clipboard-item"
-            :class="{ dragging: draggedItem === index }"
-            draggable="true"
+            :class="{ 'dragging': draggedItem === index, 'mobile-view': isMobile }"
+            :draggable="!isMobile"
             :data-clipboard-index="index"
-            @dragstart="handleDragStart(index)"
-            @dragover="handleDragOver($event, index)"
-            @drop="handleDrop(index)"
-            @dragend="handleDragEnd"
-            @touchstart.passive="handleTouchStartDelete($event, index)"
-            @touchmove.passive="handleTouchMoveDelete($event, index)"
-            @touchend="handleTouchEndDelete($event, index)"
+            @dragstart="!isMobile && handleDragStart(index)"
+            @dragover="!isMobile && handleDragOver($event, index)"
+            @drop="!isMobile && handleDrop(index)"
+            @dragend="!isMobile && handleDragEnd"
+            @touchstart.passive="handleTouchStart($event, index)"
+            @touchmove.passive="handleTouchMove($event, index)"
+            @touchend.passive="handleTouchEnd($event, index)"
           >
-            <div class="drag-handle" title="Drag to reorder">
-              ⋮
+            <!-- Desktop drag handle -->
+            <div v-if="!isMobile" class="drag-handle desktop" title="Drag to reorder">
+              ⋮⋮
             </div>
-            <p class="clipboard-text">
-              {{ verse.text }}
-            </p>
+
+            <!-- Mobile drag handle -->
+            <div v-if="isMobile" class="drag-handle mobile" title="Long press to drag">
+              <div class="drag-dots">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+
+            <div class="clipboard-content">
+              <p class="clipboard-text">
+                {{ verse.text }}
+              </p>
+            </div>
+
+            <!-- Desktop remove button -->
             <button
-              class="clipboard-remove-btn"
+              v-if="!isMobile"
+              class="desktop clipboard-remove-btn"
               title="Remove verse"
               @click="removeFromClipboard(index)"
             >
               ✕
             </button>
+
+            <!-- Mobile swipe delete overlay -->
+            <div v-if="isMobile" class="mobile-delete-overlay" :style="{ transform: `translateX(${swipeOffset[index] || 0}px)` }">
+              <div class="delete-action" @click="removeFromClipboard(index)">
+                <span>Delete</span>
+              </div>
+            </div>
           </li>
         </ul>
       </div>
@@ -1071,15 +1122,18 @@ function handleTouchEndDelete(event: TouchEvent, index: number) {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   color: #000000;
   transition: border-top 0.2s ease;
-}
-
-.clipboard-item:last-child {
-  margin-bottom: 0;
+  position: relative;
+  touch-action: pan-y;
 }
 
 .clipboard-item.dragging {
-  background: rgba(0, 102, 204, 0.1);
-  opacity: 0.8;
+  opacity: 0.7;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.clipboard-item.mobile-view:active {
+  transform: scale(0.98);
 }
 
 .clipboard-item[data-swipe-start='true'] {
@@ -1124,15 +1178,22 @@ function handleTouchEndDelete(event: TouchEvent, index: number) {
   flex-shrink: 0;
 }
 
-.drag-handle:hover {
+.drag-handle.desktop {
+  display: block;
+}
+
+.drag-handle.desktop:hover {
   background: rgba(0, 102, 204, 0.1);
   border-radius: 4px;
 }
 
-.app-footer {
-  text-align: center;
-  padding: 2rem;
-  background: rgba(0, 0, 0, 0.2);
+.drag-handle.mobile {
+  cursor: grab;
+  padding: 0.5rem;
+  color: #666;
+  user-select: none;
+  flex-shrink: 0;
+  display: none;
   margin-top: auto;
 }
 
