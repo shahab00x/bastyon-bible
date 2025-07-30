@@ -52,7 +52,7 @@ const hasUserSelectedVersion = computed(() => {
 })
 
 function showDeleteOverlay(index: number) {
-  return isMobile.value && (swipeOffset.value[index] || 0) < -10 // Show on any leftward swipe
+  return isMobile.value && (swipeOffset.value[index] || 0) < -30 // Show earlier for better feedback
 }
 
 // Initialize with placeholder
@@ -320,6 +320,9 @@ function removeFromClipboard(index: number) {
   clipboardVerses.value.splice(index, 1)
   updateSystemClipboard()
 
+  // Reset all swipe offsets to prevent items from staying swiped
+  swipeOffset.value = {}
+
   // Hide ribbon if empty
   if (clipboardVerses.value.length === 0) {
     showClipboardRibbon.value = false
@@ -454,11 +457,12 @@ function handleTouchEnd(event: TouchEvent, index: number) {
     }
     else if (!isDragging.value) {
       // Handle swipe-to-delete
-      if (Math.abs(deltaX) > 50 && deltaY < 30 && deltaX > 0) {
+      if (Math.abs(deltaX) > 100 && deltaY < 30 && deltaX > 0) {
+        // Swipe threshold met - delete the item
         removeFromClipboard(index)
       }
       else {
-        // Reset swipe offset
+        // Snap back - reset swipe offset with animation
         swipeOffset.value[index] = 0
       }
     }
@@ -1260,10 +1264,10 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   position: relative;
   z-index: 2;
   background: white;
-  transition: transform 0.2s ease;
+  transition: transform 0.3s ease; /* Increased duration for smooth snap-back */
   display: flex;
-  flex-direction: row; /* Ensure horizontal layout */
-  align-items: center; /* Center items vertically */
+  flex-direction: row;
+  align-items: center;
   gap: 15px;
   padding: 15px 20px;
   /* other existing styles */
