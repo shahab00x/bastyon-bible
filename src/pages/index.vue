@@ -1050,7 +1050,8 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .verse-content {
   display: flex;
-  align-items: flex-start;
+  flex-direction: row; /* Change from column to row */
+  align-items: flex-start; /* Keep top alignment */
   gap: 1rem;
   margin-bottom: 0.5rem;
   text-align: left;
@@ -1377,10 +1378,10 @@ function handleTouchEnd(event: TouchEvent, index: number) {
     grid-template-columns: 1fr;
   }
 
-  .verse-content {
+  /* .verse-content {
     flex-direction: column;
     align-items: flex-start;
-  }
+  } */
 
   .chapter-navigation-top,
   .chapter-navigation-bottom {
