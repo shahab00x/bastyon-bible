@@ -384,6 +384,9 @@ function handleTouchStart(event: TouchEvent, index: number) {
   touchStartY.value = event.touches[0].clientY
 
   if (isMobile.value) {
+    // Prevent text selection immediately
+    event.preventDefault()
+
     // Start long press timer for drag initiation
     longPressTimer.value = window.setTimeout(() => {
       draggedItem.value = index
@@ -395,8 +398,12 @@ function handleTouchStart(event: TouchEvent, index: number) {
         const htmlItem = item as HTMLElement
         htmlItem.style.opacity = '0.7'
         htmlItem.style.transform = 'scale(1.02)'
+        htmlItem.style.zIndex = '1000'
+        // Prevent text selection during drag
+        htmlItem.style.userSelect = 'none'
+        htmlItem.style.webkitUserSelect = 'none'
       }
-    }, 300) // Reduced from 500ms for better responsiveness
+    }, 500) // Keep 500ms for better distinction between swipe and drag
   }
 }
 
@@ -408,22 +415,44 @@ function handleTouchMove(event: TouchEvent, index: number) {
   const touchY = event.touches[0].clientY
 
   const deltaX = touchStartX.value - touchX
-  const deltaY = Math.abs(touchStartY.value - touchY)
+  const deltaY = touchStartY.value - touchY
 
-  // Only handle horizontal swipes and prevent scrolling
-  if (Math.abs(deltaX) > deltaY && Math.abs(deltaX) > 10) {
-    event.preventDefault()
-
-    // Only allow leftward swipes (deltaX > 0) and limit distance
-    if (deltaX > 0 && isMobile.value)
-      swipeOffset.value[index] = -Math.min(deltaX, 100)
+  // Clear long press timer if movement detected early
+  if ((Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) && longPressTimer.value) {
+    clearTimeout(longPressTimer.value)
+    longPressTimer.value = null
   }
 
-  // Clear long press timer if movement detected
-  if (Math.abs(deltaX) > 10 || deltaY > 10) {
-    if (longPressTimer.value) {
-      clearTimeout(longPressTimer.value)
-      longPressTimer.value = null
+  if (isMobile.value && isDragging.value && draggedItem.value !== null) {
+    // Mobile drag mode - move item around
+    event.preventDefault()
+
+    const target = event.target as HTMLElement
+    const item = target.closest('.clipboard-item')
+    if (item) {
+      const htmlItem = item as HTMLElement
+      htmlItem.style.transform = `translate(${-deltaX}px, ${-deltaY}px) scale(1.02)`
+    }
+
+    // Check if we're over another item for reordering
+    const elementBelow = document.elementFromPoint(touchX, touchY)
+    const itemBelow = elementBelow?.closest('.clipboard-item')
+    if (itemBelow && itemBelow !== item) {
+      const belowIndex = Number.parseInt(itemBelow.getAttribute('data-clipboard-index') || '0')
+      if (belowIndex !== draggedItem.value) {
+        // Visual feedback - highlight drop target
+        document.querySelectorAll('.clipboard-item').forEach(el => el.classList.remove('drop-target'))
+        itemBelow.classList.add('drop-target')
+      }
+    }
+  }
+  else if (isMobile.value && !isDragging.value) {
+    // Mobile swipe-to-delete mode
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+      event.preventDefault()
+
+      if (deltaX > 0)
+        swipeOffset.value[index] = -Math.min(deltaX, 100)
     }
   }
 }
@@ -447,24 +476,35 @@ function handleTouchEnd(event: TouchEvent, index: number) {
     const htmlItem = item as HTMLElement
     htmlItem.style.opacity = ''
     htmlItem.style.transform = ''
+    htmlItem.style.zIndex = ''
+    htmlItem.style.userSelect = ''
+    htmlItem.style.webkitUserSelect = ''
   }
+
+  // Remove drop target highlighting
+  document.querySelectorAll('.clipboard-item').forEach(el => el.classList.remove('drop-target'))
 
   if (isMobile.value) {
     if (isDragging.value && draggedItem.value !== null) {
+      // Handle drag drop
+      const elementBelow = document.elementFromPoint(touchEndX, touchEndY)
+      const itemBelow = elementBelow?.closest('.clipboard-item')
+      if (itemBelow) {
+        const belowIndex = Number.parseInt(itemBelow.getAttribute('data-clipboard-index') || '0')
+        if (belowIndex !== draggedItem.value)
+          reorderVerses(draggedItem.value, belowIndex)
+      }
+
       // End drag mode
       isDragging.value = false
       draggedItem.value = null
     }
     else if (!isDragging.value) {
       // Handle swipe-to-delete
-      if (Math.abs(deltaX) > 100 && deltaY < 30 && deltaX > 0) {
-        // Swipe threshold met - delete the item
+      if (Math.abs(deltaX) > 100 && deltaY < 30 && deltaX > 0)
         removeFromClipboard(index)
-      }
-      else {
-        // Snap back - reset swipe offset with animation
+      else
         swipeOffset.value[index] = 0
-      }
     }
   }
 
@@ -675,13 +715,14 @@ function handleTouchEnd(event: TouchEvent, index: number) {
             class="clipboard-item"
             :class="{ 'dragging': draggedItem === index, 'mobile-view': isMobile }"
             :draggable="!isMobile"
+            :data-clipboard-index="index"
             @dragstart="!isMobile && handleDragStart(index)"
             @dragover="!isMobile && handleDragOver($event, index)"
             @drop="!isMobile && handleDrop(index)"
             @dragend="!isMobile && handleDragEnd"
-            @touchstart.passive="handleTouchStart($event, index)"
+            @touchstart="handleTouchStart($event, index)"
             @touchmove="handleTouchMove($event, index)"
-            @touchend.passive="handleTouchEnd($event, index)"
+            @touchend="handleTouchEnd($event, index)"
           >
             <!-- Delete overlay (appears behind) - MOBILE ONLY -->
             <div
@@ -1284,9 +1325,14 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   transform: translateX(2px);
 }
 
+.clipboard-item.drop-target {
+  background: rgba(102, 126, 234, 0.1);
+  border: 2px dashed rgba(102, 126, 234, 0.3);
+}
+
 .clipboard-item.dragging {
   opacity: 0.8;
-  transform: scale(1.02) rotate(2deg);
+  transform: scale(1.02);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   z-index: 1000;
 }
