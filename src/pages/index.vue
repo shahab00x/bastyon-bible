@@ -424,7 +424,7 @@ function handleDragStart(index: number) {
 }
 
 function handleDragOver(event: DragEvent, index: number) {
-  event.preventDefault()
+  // event.preventDefault()
 
   // Update drag over index for visual feedback
   if (draggedItem.value !== null && draggedItem.value !== index) {
@@ -478,7 +478,7 @@ function handleDragHandleTouch(event: TouchEvent, index: number) {
   touchStartY.value = event.touches[0].clientY
 
   // Prevent text selection immediately
-  event.preventDefault()
+  // event.preventDefault()
   event.stopPropagation() // Prevent the regular touch handler from firing
 
   // Start drag immediately when touching the drag handle
@@ -540,7 +540,7 @@ function handleTouchStart(event: TouchEvent, index: number) {
 
   if (isMobile.value) {
     // Prevent text selection immediately
-    event.preventDefault()
+    // event.preventDefault()
 
     // Start long press timer for drag initiation (longer delay for non-handle touches)
     longPressTimer.value = window.setTimeout(() => {
@@ -579,7 +579,7 @@ function handleTouchMove(event: TouchEvent, index: number) {
 
   if (isMobile.value && isDragging.value && draggedItem.value !== null) {
     // Mobile drag mode - move item around
-    event.preventDefault()
+    // event.preventDefault()
 
     const target = event.target as HTMLElement
     const item = target.closest('.clipboard-item')
@@ -610,7 +610,7 @@ function handleTouchMove(event: TouchEvent, index: number) {
   else if (isMobile.value && !isDragging.value) {
     // Handle swipe-to-delete for non-dragging items
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) { // Horizontal swipe
-      event.preventDefault()
+      // event.preventDefault()
       if (deltaX > 0) { // Swiping left to reveal delete
         swipeOffset.value[index] = -Math.min(deltaX, 100) // Limit swipe distance
       }
@@ -894,9 +894,9 @@ function handleTouchEnd(event: TouchEvent, index: number) {
             @dragover="!isMobile && handleDragOver($event, index)"
             @drop="!isMobile && handleDrop(index)"
             @dragend="!isMobile && handleDragEnd"
-            @touchstart="handleTouchStart($event, index)"
-            @touchmove="handleTouchMove($event, index)"
-            @touchend="handleTouchEnd($event, index)"
+            @touchstart.passive="handleTouchStart($event, index)"
+            @touchmove.passive="handleTouchMove($event, index)"
+            @touchend.passive="handleTouchEnd($event, index)"
           >
             <!-- Delete overlay (appears behind) - MOBILE ONLY -->
             <div
@@ -1453,6 +1453,9 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .clipboard-item {
   /* existing styles... */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation; /* Prevents default touch behaviors */
   transition: none;
   position: relative;
 }
