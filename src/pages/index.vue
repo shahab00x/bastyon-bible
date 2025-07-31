@@ -902,7 +902,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
             <div
               v-if="isMobile && showDeleteOverlay(index)"
               class="mobile-delete-overlay"
-              :class="{ show: Math.abs(swipeOffset[index] || 0) > 60 }"
+              :class="{ show: Math.abs(swipeOffset[index] || 0) > -20 }"
             >
               <div class="delete-action" @click="removeFromClipboard(index)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1453,7 +1453,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .clipboard-item {
   /* existing styles... */
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: none;
   position: relative;
 }
 
@@ -1462,15 +1462,15 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 80px;
+  width: 100px;
   background-color: #ef4444;
   color: white;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: right;
+  justify-content: right;
   z-index: 1;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.5s ease-in-out;
 }
 
 .mobile-delete-overlay.show {
@@ -1487,6 +1487,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   align-items: center;
   gap: 15px;
   padding: 15px 20px;
+  min-width: 0;
   /* other existing styles */
 }
 
@@ -1508,19 +1509,19 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 }
 
 /* Displacement animations for items that move during reorder */
-.clipboard-item.displaced-up {
+/* .clipboard-item.displaced-up {
   transform: translateY(-15px) !important;
   background: rgba(34, 197, 94, 0.1) !important;
   border-left: 3px solid rgba(34, 197, 94, 0.6) !important;
   transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
-}
+} */
 
-.clipboard-item.displaced-down {
+/* .clipboard-item.displaced-down {
   transform: translateY(15px) !important;
   background: rgba(239, 68, 68, 0.1) !important;
   border-left: 3px solid rgba(239, 68, 68, 0.6) !important;
   transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
-}
+} */
 
 .clipboard-item.dragging {
   opacity: 0.8;
@@ -1567,7 +1568,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .drag-dots {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap: 2px;
   width: 12px;
@@ -1677,13 +1678,13 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   }
 
   /* Mobile displacement animations are more subtle */
-  .clipboard-item.displaced-up {
+  /* .clipboard-item.displaced-up {
     transform: translateY(-3px);
   }
 
   .clipboard-item.displaced-down {
     transform: translateY(3px);
-  }
+  } */
 }
 
 @media (max-width: 768px) {
