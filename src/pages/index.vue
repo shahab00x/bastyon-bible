@@ -45,6 +45,7 @@ const isMobile = ref(false)
 const swipeOffset = ref<Record<number, number>>({})
 const longPressTimer = ref<number | null>(null)
 const isDragging = ref(false)
+const dragOverIndex = ref<number | null>(null)
 
 // Computed property for tracking if user has selected a version
 const hasUserSelectedVersion = computed(() => {
@@ -331,12 +332,39 @@ function removeFromClipboard(index: number) {
 }
 
 function reorderVerses(fromIndex: number, toIndex: number) {
+  // Don't proceed if indices are the same
+  if (fromIndex === toIndex)
+    return
+
   // Add visual feedback before reordering
   const items = document.querySelectorAll('.clipboard-item')
+
+  // Mark items that will be displaced
   items.forEach((item, index) => {
     const htmlItem = item as HTMLElement
-    if (index === fromIndex || index === toIndex)
+
+    // Clear existing displacement classes
+    htmlItem.classList.remove('displaced-up', 'displaced-down', 'reordering')
+
+    if (index === fromIndex || index === toIndex) {
       htmlItem.classList.add('reordering')
+    }
+    else {
+      // Determine displacement direction
+      const min = Math.min(fromIndex, toIndex)
+      const max = Math.max(fromIndex, toIndex)
+
+      if (index >= min && index <= max) {
+        if (fromIndex < toIndex && index > fromIndex && index <= toIndex) {
+          // Moving down: items between move up
+          htmlItem.classList.add('displaced-up')
+        }
+        else if (fromIndex > toIndex && index >= toIndex && index < fromIndex) {
+          // Moving up: items between move down
+          htmlItem.classList.add('displaced-down')
+        }
+      }
+    }
   })
 
   // Delay the actual reordering to allow animation
@@ -349,10 +377,13 @@ function reorderVerses(fromIndex: number, toIndex: number) {
     setTimeout(() => {
       items.forEach((item) => {
         const htmlItem = item as HTMLElement
-        htmlItem.classList.remove('reordering')
+        htmlItem.classList.remove('reordering', 'displaced-up', 'displaced-down')
       })
-    }, 300)
-  }, 150)
+
+      // Clear drag state
+      dragOverIndex.value = null
+    }, 400)
+  }, 200)
 }
 
 function toggleClipboard() {
@@ -377,10 +408,61 @@ function goToPreviousChapter() {
 
 function handleDragStart(index: number) {
   draggedItem.value = index
+
+  // Add dragging class to the dragged item
+  setTimeout(() => {
+    const items = document.querySelectorAll('.clipboard-item')
+    if (items[index]) {
+      const htmlItem = items[index] as HTMLElement
+      htmlItem.classList.add('dragging')
+    }
+  }, 0)
 }
 
-function handleDragOver(event: DragEvent, _index: number) {
+function handleDragOver(event: DragEvent, index: number) {
   event.preventDefault()
+
+  // Update drag over index for visual feedback
+  if (draggedItem.value !== null && draggedItem.value !== index) {
+    dragOverIndex.value = index
+    updateDisplacementAnimations(draggedItem.value, index)
+  }
+}
+
+function updateDisplacementAnimations(draggedIndex: number, targetIndex: number) {
+  console.log('Updating displacement animations:', { draggedIndex, targetIndex })
+  const items = document.querySelectorAll('.clipboard-item')
+
+  items.forEach((item, itemIndex) => {
+    const htmlItem = item as HTMLElement
+
+    // Clear all previous classes
+    htmlItem.classList.remove('displaced-up', 'displaced-down', 'drop-target')
+
+    if (itemIndex === targetIndex) {
+      // Highlight the drop target
+      htmlItem.classList.add('drop-target')
+      console.log(`Item ${itemIndex} is drop target`)
+    }
+    else if (itemIndex !== draggedIndex) {
+      // Calculate if this item will be displaced
+      const min = Math.min(draggedIndex, targetIndex)
+      const max = Math.max(draggedIndex, targetIndex)
+
+      if (itemIndex > min && itemIndex <= max) {
+        if (draggedIndex < targetIndex) {
+          // Dragging down: items between move up
+          htmlItem.classList.add('displaced-up')
+          console.log(`Item ${itemIndex} displaced UP (dragging down from ${draggedIndex} to ${targetIndex})`)
+        }
+        else {
+          // Dragging up: items between move down
+          htmlItem.classList.add('displaced-down')
+          console.log(`Item ${itemIndex} displaced DOWN (dragging up from ${draggedIndex} to ${targetIndex})`)
+        }
+      }
+    }
+  })
 }
 
 // Add this new function in your script setup
@@ -416,11 +498,27 @@ function handleDrop(index: number) {
   if (draggedItem.value !== null) {
     reorderVerses(draggedItem.value, index)
     draggedItem.value = null
+    dragOverIndex.value = null
+
+    // Clean up visual feedback
+    const items = document.querySelectorAll('.clipboard-item')
+    items.forEach((item) => {
+      const htmlItem = item as HTMLElement
+      htmlItem.classList.remove('displaced-up', 'displaced-down', 'drop-target')
+    })
   }
 }
 
 function handleDragEnd() {
   draggedItem.value = null
+  dragOverIndex.value = null
+
+  // Clean up visual feedback
+  const items = document.querySelectorAll('.clipboard-item')
+  items.forEach((item) => {
+    const htmlItem = item as HTMLElement
+    htmlItem.classList.remove('displaced-up', 'displaced-down', 'drop-target')
+  })
 }
 
 function checkMobile() {
@@ -483,18 +581,34 @@ function handleTouchMove(event: TouchEvent, index: number) {
     const item = target.closest('.clipboard-item')
     if (item) {
       const htmlItem = item as HTMLElement
-      htmlItem.style.transform = `translate(${-deltaX}px, ${-deltaY}px) scale(1.02)`
+      htmlItem.style.transform = `translate(${-deltaX}px, ${-deltaY}px) scale(1.02) rotate(2deg)`
+      htmlItem.style.zIndex = '1000'
     }
 
     // Check if we're over another item for reordering
     const elementBelow = document.elementFromPoint(touchX, touchY)
     const itemBelow = elementBelow?.closest('.clipboard-item')
+
     if (itemBelow && itemBelow !== item) {
       const belowIndex = Number.parseInt(itemBelow.getAttribute('data-clipboard-index') || '0')
-      if (belowIndex !== draggedItem.value) {
-        // Visual feedback - highlight drop target
-        document.querySelectorAll('.clipboard-item').forEach(el => el.classList.remove('drop-target'))
-        itemBelow.classList.add('drop-target')
+      console.log('Mobile drag over item:', belowIndex, 'dragged item:', draggedItem.value)
+
+      if (belowIndex !== draggedItem.value && dragOverIndex.value !== belowIndex) {
+        // Update drag over index and apply displacement animations
+        dragOverIndex.value = belowIndex
+        updateDisplacementAnimations(draggedItem.value, belowIndex)
+      }
+    }
+    else {
+      // Clear animations when not over a valid target
+      if (dragOverIndex.value !== null) {
+        console.log('Clearing displacement animations')
+        dragOverIndex.value = null
+        const items = document.querySelectorAll('.clipboard-item')
+        items.forEach((listItem) => {
+          const htmlListItem = listItem as HTMLElement
+          htmlListItem.classList.remove('drop-target', 'displaced-up', 'displaced-down')
+        })
       }
     }
   }
@@ -535,7 +649,11 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   }
 
   // Remove drop target highlighting
-  document.querySelectorAll('.clipboard-item').forEach(el => el.classList.remove('drop-target'))
+  const items = document.querySelectorAll('.clipboard-item')
+  items.forEach((el) => {
+    const htmlEl = el as HTMLElement
+    htmlEl.classList.remove('drop-target', 'displaced-up', 'displaced-down')
+  })
 
   if (isMobile.value) {
     if (isDragging.value && draggedItem.value !== null) {
@@ -551,6 +669,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
       // End drag mode
       isDragging.value = false
       draggedItem.value = null
+      dragOverIndex.value = null
     }
     else if (!isDragging.value) {
       // Handle swipe-to-delete
@@ -1378,11 +1497,27 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   transform: translateX(2px);
 }
 
+/* Enhanced displacement animations */
 .clipboard-item.drop-target {
-  background: rgba(102, 126, 234, 0.1);
-  border: 2px dashed rgba(102, 126, 234, 0.5);
-  transform: scale(1.02);
+  background: rgba(102, 126, 234, 0.1) !important;
+  border: 2px dashed rgba(102, 126, 234, 0.5) !important;
+  transform: scale(1.02) !important;
   animation: dropTargetPulse 0.6s ease-in-out infinite alternate;
+}
+
+/* Displacement animations for items that move during reorder */
+.clipboard-item.displaced-up {
+  transform: translateY(-15px) !important;
+  background: rgba(34, 197, 94, 0.1) !important;
+  border-left: 3px solid rgba(34, 197, 94, 0.6) !important;
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.clipboard-item.displaced-down {
+  transform: translateY(15px) !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-left: 3px solid rgba(239, 68, 68, 0.6) !important;
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
 }
 
 .clipboard-item.dragging {
@@ -1403,6 +1538,8 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .clipboard-item.reordering {
   animation: reorderPulse 0.4s ease-in-out;
+  transform: scale(1.02);
+  background: rgba(102, 126, 234, 0.1);
 }
 
 .drag-handle {
@@ -1487,6 +1624,13 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   opacity: 0.8;
 }
 
+.app-footer {
+  text-align: center;
+  padding: 2rem 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  margin-top: 2rem;
+}
+
 /* Animations */
 @keyframes dragStart {
   0% {
@@ -1528,6 +1672,15 @@ function handleTouchEnd(event: TouchEvent, index: number) {
   .clipboard-item.dragging {
     transform: scale(1.08) rotate(3deg);
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Mobile displacement animations are more subtle */
+  .clipboard-item.displaced-up {
+    transform: translateY(-3px);
+  }
+
+  .clipboard-item.displaced-down {
+    transform: translateY(3px);
   }
 }
 
