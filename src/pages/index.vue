@@ -331,9 +331,28 @@ function removeFromClipboard(index: number) {
 }
 
 function reorderVerses(fromIndex: number, toIndex: number) {
-  const verse = clipboardVerses.value.splice(fromIndex, 1)[0]
-  clipboardVerses.value.splice(toIndex, 0, verse)
-  updateSystemClipboard()
+  // Add visual feedback before reordering
+  const items = document.querySelectorAll('.clipboard-item')
+  items.forEach((item, index) => {
+    const htmlItem = item as HTMLElement
+    if (index === fromIndex || index === toIndex)
+      htmlItem.classList.add('reordering')
+  })
+
+  // Delay the actual reordering to allow animation
+  setTimeout(() => {
+    const verse = clipboardVerses.value.splice(fromIndex, 1)[0]
+    clipboardVerses.value.splice(toIndex, 0, verse)
+    updateSystemClipboard()
+
+    // Remove animation classes after a delay
+    setTimeout(() => {
+      items.forEach((item) => {
+        const htmlItem = item as HTMLElement
+        htmlItem.classList.remove('reordering')
+      })
+    }, 300)
+  }, 150)
 }
 
 function toggleClipboard() {
@@ -364,6 +383,35 @@ function handleDragOver(event: DragEvent, _index: number) {
   event.preventDefault()
 }
 
+// Add this new function in your script setup
+function handleDragHandleTouch(event: TouchEvent, index: number) {
+  if (!isMobile.value)
+    return
+
+  touchStartX.value = event.touches[0].clientX
+  touchStartY.value = event.touches[0].clientY
+
+  // Prevent text selection immediately
+  event.preventDefault()
+  event.stopPropagation() // Prevent the regular touch handler from firing
+
+  // Start drag immediately when touching the drag handle
+  draggedItem.value = index
+  isDragging.value = true
+
+  const target = event.target as HTMLElement
+  const item = target.closest('.clipboard-item')
+  if (item) {
+    const htmlItem = item as HTMLElement
+    htmlItem.style.opacity = '0.8'
+    htmlItem.style.transform = 'scale(1.05)'
+    htmlItem.style.zIndex = '1000'
+    htmlItem.style.userSelect = 'none'
+    htmlItem.style.webkitUserSelect = 'none'
+    htmlItem.classList.add('drag-starting')
+  }
+}
+
 function handleDrop(index: number) {
   if (draggedItem.value !== null) {
     reorderVerses(draggedItem.value, index)
@@ -380,6 +428,11 @@ function checkMobile() {
 }
 
 function handleTouchStart(event: TouchEvent, index: number) {
+  // Check if touch started on drag handle - if so, let the drag handle handler take over
+  const target = event.target as HTMLElement
+  if (target.closest('.drag-handle'))
+    return // Let handleDragHandleTouch handle this
+
   touchStartX.value = event.touches[0].clientX
   touchStartY.value = event.touches[0].clientY
 
@@ -387,23 +440,22 @@ function handleTouchStart(event: TouchEvent, index: number) {
     // Prevent text selection immediately
     event.preventDefault()
 
-    // Start long press timer for drag initiation
+    // Start long press timer for drag initiation (longer delay for non-handle touches)
     longPressTimer.value = window.setTimeout(() => {
       draggedItem.value = index
       isDragging.value = true
 
-      const target = event.target as HTMLElement
       const item = target.closest('.clipboard-item')
       if (item) {
         const htmlItem = item as HTMLElement
         htmlItem.style.opacity = '0.7'
         htmlItem.style.transform = 'scale(1.02)'
         htmlItem.style.zIndex = '1000'
-        // Prevent text selection during drag
         htmlItem.style.userSelect = 'none'
         htmlItem.style.webkitUserSelect = 'none'
+        htmlItem.classList.add('drag-starting')
       }
-    }, 500) // Keep 500ms for better distinction between swipe and drag
+    }, 800) // Longer delay for non-handle touches
   }
 }
 
@@ -479,6 +531,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
     htmlItem.style.zIndex = ''
     htmlItem.style.userSelect = ''
     htmlItem.style.webkitUserSelect = ''
+    htmlItem.classList.remove('drag-starting', 'dragging') // Clean up animation classes
   }
 
   // Remove drop target highlighting
@@ -757,7 +810,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
               </div>
 
               <!-- Mobile drag handle -->
-              <div v-if="isMobile" class="drag-handle mobile" title="Swipe left to delete">
+              <div v-if="isMobile" class="drag-handle mobile" title="Swipe left to delete" @touchstart="handleDragHandleTouch($event, index)">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="9" cy="5" r="1" />
                   <circle cx="9" cy="12" r="1" />
@@ -1278,9 +1331,9 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 }
 
 .clipboard-item {
+  /* existing styles... */
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   position: relative;
-  overflow: hidden;
-  /* other existing styles */
 }
 
 .mobile-delete-overlay {
@@ -1327,21 +1380,34 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .clipboard-item.drop-target {
   background: rgba(102, 126, 234, 0.1);
-  border: 2px dashed rgba(102, 126, 234, 0.3);
+  border: 2px dashed rgba(102, 126, 234, 0.5);
+  transform: scale(1.02);
+  animation: dropTargetPulse 0.6s ease-in-out infinite alternate;
 }
 
 .clipboard-item.dragging {
   opacity: 0.8;
-  transform: scale(1.02);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  transform: scale(1.05) rotate(2deg);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
   z-index: 1000;
+  transition: none; /* Disable transition during drag */
 }
 
 .clipboard-item.dragging .drag-handle {
   cursor: grabbing;
 }
 
+.clipboard-item.drag-starting {
+  animation: dragStart 0.2s ease-out;
+}
+
+.clipboard-item.reordering {
+  animation: reorderPulse 0.4s ease-in-out;
+}
+
 .drag-handle {
+  transition: all 0.2s ease;
+  cursor: grab;
   cursor: grab;
   margin-right: 15px;
   color: #a0aec0;
@@ -1352,15 +1418,17 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
 .drag-handle:hover {
   color: #667eea;
+  transform: scale(1.1);
 }
 
 .drag-handle:active {
   cursor: grabbing;
+  transform: scale(0.95);
 }
 
 .drag-dots {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap: 2px;
   width: 12px;
@@ -1417,6 +1485,50 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 .footer-note {
   font-size: 0.9rem;
   opacity: 0.8;
+}
+
+/* Animations */
+@keyframes dragStart {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes reorderPulse {
+  0%,
+  100% {
+    background: rgba(102, 126, 234, 0.05);
+    transform: scale(1);
+  }
+  50% {
+    background: rgba(102, 126, 234, 0.15);
+    transform: scale(1.02);
+  }
+}
+
+@keyframes dropTargetPulse {
+  0% {
+    border-color: rgba(102, 126, 234, 0.3);
+    background: rgba(102, 126, 234, 0.05);
+  }
+  100% {
+    border-color: rgba(102, 126, 234, 0.7);
+    background: rgba(102, 126, 234, 0.15);
+  }
+}
+
+/* Enhanced mobile drag feedback */
+@media (max-width: 768px) {
+  .clipboard-item.dragging {
+    transform: scale(1.08) rotate(3deg);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+  }
 }
 
 @media (max-width: 768px) {
