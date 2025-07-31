@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useAutoAnimate } from '@formkit/auto-animate/vue'
 
 interface BibleBook {
   abbrev: string
@@ -38,14 +39,17 @@ const selectedVersion = ref<BibleVersion | null>(null)
 const clipboardVerses = ref<Array<{ text: string, book: string, chapter: number, verse: number, id: string }>>([])
 const showClipboardRibbon = ref(false)
 const isClipboardOpen = ref(false)
-const draggedItem = ref<number | null>(null)
-const touchStartX = ref<number>(0)
-const touchStartY = ref<number>(0)
 const isMobile = ref(false)
-const swipeOffset = ref<Record<number, number>>({})
-const longPressTimer = ref<number | null>(null)
-const isDragging = ref(false)
+const draggedItem = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
+const isDragging = ref(false)
+const longPressTimer = ref<number | null>(null)
+const touchStartX = ref(0)
+const touchStartY = ref(0)
+const swipeOffset = ref<Record<number, number>>({})
+// const showOverlayFor = ref<number | null>(null)
+// AutoAnimate ref for clipboard list
+const [clipboardListRef] = useAutoAnimate()
 
 // Computed property for tracking if user has selected a version
 const hasUserSelectedVersion = computed(() => {
@@ -568,7 +572,7 @@ function handleTouchMove(event: TouchEvent, index: number) {
   const deltaY = touchStartY.value - touchY
 
   // Clear long press timer if movement detected early
-  if ((Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) && longPressTimer.value) {
+  if ((Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) && longPressTimer.value) {
     clearTimeout(longPressTimer.value)
     longPressTimer.value = null
   }
@@ -581,8 +585,10 @@ function handleTouchMove(event: TouchEvent, index: number) {
     const item = target.closest('.clipboard-item')
     if (item) {
       const htmlItem = item as HTMLElement
-      htmlItem.style.transform = `translate(${-deltaX}px, ${-deltaY}px) scale(1.02) rotate(2deg)`
+      // Apply visual feedback during dragging
+      htmlItem.style.transform = `translate(${-deltaX}px, ${-deltaY}px) scale(1.02)`
       htmlItem.style.zIndex = '1000'
+      htmlItem.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.2)'
     }
 
     // Check if we're over another item for reordering
@@ -590,35 +596,24 @@ function handleTouchMove(event: TouchEvent, index: number) {
     const itemBelow = elementBelow?.closest('.clipboard-item')
 
     if (itemBelow && itemBelow !== item) {
-      const belowIndex = Number.parseInt(itemBelow.getAttribute('data-clipboard-index') || '0')
-      console.log('Mobile drag over item:', belowIndex, 'dragged item:', draggedItem.value)
+      // Use a more reliable method to determine the index
+      const items = Array.from(document.querySelectorAll('.clipboard-item'))
+      const belowIndex = items.indexOf(itemBelow)
 
-      if (belowIndex !== draggedItem.value && dragOverIndex.value !== belowIndex) {
+      if (belowIndex !== -1 && belowIndex !== draggedItem.value) {
         // Update drag over index and apply displacement animations
         dragOverIndex.value = belowIndex
         updateDisplacementAnimations(draggedItem.value, belowIndex)
       }
     }
-    else {
-      // Clear animations when not over a valid target
-      if (dragOverIndex.value !== null) {
-        console.log('Clearing displacement animations')
-        dragOverIndex.value = null
-        const items = document.querySelectorAll('.clipboard-item')
-        items.forEach((listItem) => {
-          const htmlListItem = listItem as HTMLElement
-          htmlListItem.classList.remove('drop-target', 'displaced-up', 'displaced-down')
-        })
-      }
-    }
   }
   else if (isMobile.value && !isDragging.value) {
-    // Mobile swipe-to-delete mode
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+    // Handle swipe-to-delete for non-dragging items
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) { // Horizontal swipe
       event.preventDefault()
-
-      if (deltaX > 0)
-        swipeOffset.value[index] = -Math.min(deltaX, 100)
+      if (deltaX > 0) { // Swiping left to reveal delete
+        swipeOffset.value[index] = -Math.min(deltaX, 100) // Limit swipe distance
+      }
     }
   }
 }
@@ -643,6 +638,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
     htmlItem.style.opacity = ''
     htmlItem.style.transform = ''
     htmlItem.style.zIndex = ''
+    htmlItem.style.boxShadow = ''
     htmlItem.style.userSelect = ''
     htmlItem.style.webkitUserSelect = ''
     htmlItem.classList.remove('drag-starting', 'dragging') // Clean up animation classes
@@ -657,13 +653,19 @@ function handleTouchEnd(event: TouchEvent, index: number) {
 
   if (isMobile.value) {
     if (isDragging.value && draggedItem.value !== null) {
-      // Handle drag drop
+      // Check if we're over another item for reordering
       const elementBelow = document.elementFromPoint(touchEndX, touchEndY)
       const itemBelow = elementBelow?.closest('.clipboard-item')
-      if (itemBelow) {
-        const belowIndex = Number.parseInt(itemBelow.getAttribute('data-clipboard-index') || '0')
-        if (belowIndex !== draggedItem.value)
+
+      if (itemBelow && itemBelow !== item) {
+        // Use a more reliable method to determine the index
+        const items = Array.from(document.querySelectorAll('.clipboard-item'))
+        const belowIndex = items.indexOf(itemBelow)
+
+        if (belowIndex !== -1 && belowIndex !== draggedItem.value) {
+          // Actually reorder the verses
           reorderVerses(draggedItem.value, belowIndex)
+        }
       }
 
       // End drag mode
@@ -880,7 +882,7 @@ function handleTouchEnd(event: TouchEvent, index: number) {
         <h3 class="clipboard-title">
           Copied Verses
         </h3>
-        <ul class="clipboard-list">
+        <ul ref="clipboardListRef" class="clipboard-list">
           <li
             v-for="(verse, index) in clipboardVerses"
             :key="verse.id"
