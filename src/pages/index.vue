@@ -612,7 +612,7 @@ function handleTouchMove(event: TouchEvent, index: number) {
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) { // Horizontal swipe
       // event.preventDefault()
       if (deltaX > 0) { // Swiping left to reveal delete
-        swipeOffset.value[index] = -Math.min(deltaX, 100) // Limit swipe distance
+        swipeOffset.value[index] = -Math.min(deltaX, 80) // Limit swipe distance
       }
     }
   }
